@@ -80,7 +80,8 @@ func (f *File) Imports(data []byte) ([]ImportLibrary, error) {
 	p := importParser{file: f, reader: NewSafeReader(data), stringBytes: MaxImportStringBytes}
 	var libraries []ImportLibrary
 	for pos := uint64(0); pos+20 <= uint64(dir.Size); pos += 20 {
-		b, err := p.span(uint64(dir.VirtualAddress) + pos)
+		// The directory extent was checked before the loop, so this RVA fits.
+		b, err := p.span(dir.VirtualAddress + uint32(pos))
 		if err != nil {
 			return nil, fmt.Errorf("import descriptor %d: %w", len(libraries), err)
 		}
@@ -107,7 +108,7 @@ func (f *File) Imports(data []byte) ([]ImportLibrary, error) {
 		if name == 0 || lookup == 0 {
 			return nil, fmt.Errorf("%w: missing DLL name or lookup table", ErrInvalidImport)
 		}
-		b, err = p.span(uint64(name))
+		b, err = p.span(name)
 		if err != nil {
 			return nil, fmt.Errorf("import DLL name: %w", err)
 		}
@@ -133,38 +134,35 @@ type importParser struct {
 
 // span bounds a read by the original file, supplied data, RVA address space,
 // and selected mapping. It also stops before an earlier section takes priority.
-func (p *importParser) span(rva uint64) ([]byte, error) {
-	if rva > math.MaxUint32 {
-		return nil, ErrIntegerOverflow
-	}
-	offset, ok := p.file.RVAToOffset(uint32(rva))
-	if !ok || int64(offset) >= p.reader.Size() {
+func (p *importParser) span(rva uint32) ([]byte, error) {
+	offset, ok := p.file.RVAToOffset(rva)
+	fileEnd := min(p.file.fileSize, p.reader.Size(), 1<<32)
+	if !ok || int64(offset) >= fileEnd {
 		return nil, ErrOutOfBounds
 	}
-	limit := min(uint64(p.file.fileSize-int64(offset)), uint64(p.reader.Size()-int64(offset)),
-		uint64(math.MaxUint32)+1-rva, uint64(math.MaxUint32)+1-uint64(offset))
-	if rva < uint64(p.file.OptionalHeader.SizeOfHeaders) {
-		limit = min(limit, uint64(p.file.OptionalHeader.SizeOfHeaders)-rva)
+	limit := min(fileEnd-int64(offset), 1<<32-int64(rva))
+	if rva < p.file.OptionalHeader.SizeOfHeaders {
+		limit = min(limit, int64(p.file.OptionalHeader.SizeOfHeaders-rva))
 	} else {
 		for _, section := range p.file.Sections {
-			va := uint64(section.VirtualAddress)
-			size := uint64(max(section.VirtualSize, section.SizeOfRawData))
+			va := section.VirtualAddress
+			size := max(section.VirtualSize, section.SizeOfRawData)
 			if size == 0 {
 				continue
 			}
 			if rva < va {
-				limit = min(limit, va-rva)
+				limit = min(limit, int64(va-rva))
 				continue
 			}
 			delta := rva - va
 			if delta < size {
 				// RVAToOffset has already checked that delta is in raw data.
-				limit = min(limit, uint64(section.SizeOfRawData)-delta)
+				limit = min(limit, int64(section.SizeOfRawData-delta))
 				break
 			}
 		}
 	}
-	return p.reader.Slice(int64(offset), int64(limit))
+	return p.reader.Slice(int64(offset), limit)
 }
 
 func (p *importParser) name(data []byte) (string, error) {
@@ -187,7 +185,7 @@ func (p *importParser) name(data []byte) (string, error) {
 }
 
 func (p *importParser) symbols(rva uint32) ([]ImportSymbol, error) {
-	table, err := p.span(uint64(rva))
+	table, err := p.span(rva)
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +218,7 @@ func (p *importParser) symbols(rva uint32) ([]ImportSymbol, error) {
 			if value > math.MaxInt32 {
 				return nil, fmt.Errorf("%w: reserved name RVA bits", ErrInvalidImport)
 			}
-			b, err := p.span(value)
+			b, err := p.span(uint32(value))
 			if err != nil {
 				return nil, err
 			}

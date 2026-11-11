@@ -3,6 +3,8 @@ package pe
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
+	"math"
 	"reflect"
 	"strings"
 	"sync"
@@ -100,6 +102,10 @@ func TestImportsMappingBounds(t *testing.T) {
 			name := binary.LittleEndian.Uint32(d[524:])
 			f.Sections = append([]Section{{SectionHeader: SectionHeader{VirtualAddress: name + 1}}}, f.Sections...)
 		}, nil},
+		{"later_overlap", func(f *File, d []byte) {
+			name := binary.LittleEndian.Uint32(d[524:])
+			f.Sections = append(f.Sections, Section{SectionHeader: SectionHeader{VirtualAddress: name + 1, VirtualSize: 1}})
+		}, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			data := buildImportsPE(true, 1, 1)
@@ -113,6 +119,48 @@ func TestImportsMappingBounds(t *testing.T) {
 				t.Fatalf("got %+v, %v; want %v", got, err, tc.want)
 			}
 		})
+	}
+}
+
+func buildImportsRVAEnd(is64 bool, remaining int) []byte {
+	section, directory := 376, 256
+	if is64 {
+		section, directory = 392, 272
+	}
+	data := append(buildImportsPE(is64, 1, 0), make([]byte, 512)...)
+	// Raw bytes extend past the 32-bit RVA space. A zero lookup
+	// entry may end at 2^32, but must not read across that boundary.
+	binary.LittleEndian.PutUint32(data[section+8:], 1024)
+	binary.LittleEndian.PutUint32(data[section+12:], math.MaxUint32-511)
+	binary.LittleEndian.PutUint32(data[section+16:], 1024)
+	binary.LittleEndian.PutUint32(data[directory:], math.MaxUint32-511)
+	lookup := uint32(uint64(1)<<32 - uint64(remaining))
+	binary.LittleEndian.PutUint32(data[512:], lookup)
+	binary.LittleEndian.PutUint32(data[528:], lookup)
+	binary.LittleEndian.PutUint32(data[524:], 480)
+	copy(data[480:], "end.dll\x00")
+	return data
+}
+
+func TestImportsRVAEnd(t *testing.T) {
+	for _, is64 := range []bool{false, true} {
+		width := 4
+		if is64 {
+			width = 8
+		}
+		for _, remaining := range []int{width - 1, width} {
+			t.Run(fmt.Sprintf("64=%t/remaining=%d", is64, remaining), func(t *testing.T) {
+				data := buildImportsRVAEnd(is64, remaining)
+				got, err := parseTestImports(t, data)
+				if remaining < width {
+					if got != nil || !errors.Is(err, ErrInvalidImport) {
+						t.Fatalf("lookup crosses RVA boundary: %+v, %v", got, err)
+					}
+				} else if err != nil || len(got) != 1 || len(got[0].Symbols) != 0 {
+					t.Fatalf("lookup ends at RVA boundary: %+v, %v", got, err)
+				}
+			})
+		}
 	}
 }
 

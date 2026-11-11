@@ -14,12 +14,14 @@ func FuzzImports(f *testing.F) {
 		binary.LittleEndian.PutUint32(fallback[512:], 0)
 		f.Add(is64, false, fallback)
 		ordinal := buildImportsPE(is64, 1, 1)
-		flag := uint64(1) << 31
+		flag, width := uint64(1)<<31, 4
 		if is64 {
-			flag = 1 << 63
+			flag, width = 1<<63, 8
 		}
 		putImportThunk(ordinal[importOffset(binary.LittleEndian.Uint32(ordinal[512:])):], is64, flag|123)
 		f.Add(is64, true, ordinal[512:])
+		f.Add(is64, false, buildImportsRVAEnd(is64, width))
+		f.Add(is64, false, buildImportsRVAEnd(is64, width-1))
 	}
 	f.Add(false, false, []byte("MZ"))
 	f.Add(true, false, buildMinimalPE(1))
