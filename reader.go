@@ -15,15 +15,15 @@ var (
 	ErrUnterminatedString = errors.New("unterminated string")
 )
 
-// SafeReader provides bounds-checked primitive reading operations
-// over a borrowed in-memory byte slice. The zero value reads an empty buffer.
+// SafeReader reads integers and strings from a byte slice with bounds checks.
+// It retains a reference to the slice. The zero value reads an empty buffer.
 type SafeReader struct {
 	data []byte
 	size int64
 }
 
-// NewSafeReader borrows a byte slice without copying it. Callers must not mutate
-// the slice concurrently with reads.
+// NewSafeReader wraps data without copying it. Don't modify data concurrently
+// with reads through the returned [SafeReader].
 func NewSafeReader(data []byte) *SafeReader {
 	return &SafeReader{
 		data: data,
@@ -31,12 +31,14 @@ func NewSafeReader(data []byte) *SafeReader {
 	}
 }
 
-// Size returns the total byte size available.
+// Size returns the input size in bytes.
 func (r *SafeReader) Size() int64 {
 	return r.size
 }
 
-// Slice returns a sub-slice at [offset : offset+length] with bounds and overflow checks.
+// Slice returns the bytes in the range [offset, offset+length).
+// It checks for invalid bounds and integer overflow. The returned slice shares
+// its underlying array with the input.
 func (r *SafeReader) Slice(offset int64, length int64) ([]byte, error) {
 	if offset < 0 || length < 0 {
 		return nil, ErrOutOfBounds
@@ -86,9 +88,13 @@ func (r *SafeReader) ReadUint64(offset int64) (uint64, error) {
 	return binary.LittleEndian.Uint64(b), nil
 }
 
-// ReadASCIIZ reads through the first NUL in at most maxLen bytes. The terminator
-// must be present within that bound and the input; it is not included in the
-// returned string. A nonpositive bound is rejected. Bytes are not transcoded.
+// ReadASCIIZ reads a NUL-terminated string starting at offset. It reads at most
+// maxLen bytes, including the terminator, and returns a copy without the NUL.
+// It preserves the input bytes without validating their encoding.
+//
+// If offset is outside the input or maxLen is nonpositive, ReadASCIIZ returns
+// [ErrOutOfBounds]. If no NUL occurs within maxLen bytes and the input,
+// it returns [ErrUnterminatedString].
 func (r *SafeReader) ReadASCIIZ(offset int64, maxLen int64) (string, error) {
 	if offset < 0 || offset >= r.size || maxLen <= 0 {
 		return "", ErrOutOfBounds
@@ -104,7 +110,7 @@ func (r *SafeReader) ReadASCIIZ(offset int64, maxLen int64) (string, error) {
 	return "", ErrUnterminatedString
 }
 
-// CheckBounds verifies that [offset : offset+length] resides entirely within bounds.
+// CheckBounds reports whether the range [offset, offset+length) is within the input.
 func (r *SafeReader) CheckBounds(offset int64, length int64) bool {
 	if offset < 0 || length < 0 {
 		return false

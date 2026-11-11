@@ -1,8 +1,11 @@
-// Package pe reads PE32 and PE32+ image headers and sections using bounded
-// in-memory parsing. It is a standalone library with no scanner dependencies.
+// Package pe reads Portable Executable (PE) image headers and sections.
+// It supports the PE32 and PE32+ formats and uses only the Go standard library.
 //
-// New requires complete headers but does not validate the Windows loader's
-// requirements, section bodies, or directory contents. It returns owned header
-// metadata without retaining the input. Address helpers map only existing file
-// bytes according to the policy documented on File.RVAToOffset.
+// Use [New] to parse a byte slice or [Open] to read a file. Both functions return
+// a metadata snapshot that retains no reference to the input. They require
+// complete headers but don't validate section bodies or data directory contents.
+//
+// [File.RVAToOffset] and [File.OffsetToRVA] convert between relative virtual
+// addresses and offsets within the original input. These methods don't emulate
+// the Windows loader.
 package pe

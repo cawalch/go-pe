@@ -40,7 +40,7 @@ type DOSHeader struct {
 	AddressOfNewEXEHeader uint32 // e_lfanew
 }
 
-// FileHeader represents the standard COFF File Header.
+// FileHeader contains the COFF file header of a PE image.
 type FileHeader struct {
 	Machine              uint16
 	NumberOfSections     uint16
@@ -51,15 +51,17 @@ type FileHeader struct {
 	Characteristics      uint16
 }
 
-// DataDirectory represents an entry in the Optional Header data directory table.
+// DataDirectory describes the location and size of a data directory.
 type DataDirectory struct {
-	// VirtualAddress is normally an RVA. The certificate directory instead
-	// contains a raw file offset and must not be passed to RVAToOffset.
+	// VirtualAddress contains an RVA, except in the certificate directory,
+	// where it contains a file offset. Don't pass a certificate directory's
+	// VirtualAddress to [File.RVAToOffset].
 	VirtualAddress uint32
 	Size           uint32
 }
 
-// OptionalHeader represents the normalized PE Optional Header (handling both PE32 and PE32+).
+// OptionalHeader contains the optional header fields for a PE32 or PE32+ image.
+// Fields that differ in width use types large enough for either format.
 type OptionalHeader struct {
 	Magic                       uint16
 	MajorLinkerVersion          uint8

@@ -9,17 +9,18 @@ import (
 	"strconv"
 )
 
-// MaxSections bounds header parsing work and allocations, including malformed
-// images. This is a parser resource limit, not a Windows loader compatibility rule.
+// MaxSections limits the number of sections the parser accepts.
+// The limit bounds parsing work and allocations; it doesn't describe a Windows
+// loader requirement.
 const MaxSections = 256
 
-// MaxSectionNameBytes bounds COFF long-name reads, including the NUL terminator.
+// MaxSectionNameBytes limits COFF long-name reads, including the NUL terminator.
 const MaxSectionNameBytes = 256
 
-// ErrSectionLimit indicates that the declared count exceeds MaxSections.
+// ErrSectionLimit indicates that the declared section count exceeds [MaxSections].
 var ErrSectionLimit = errors.New("section count exceeds parser limit")
 
-// SectionHeader represents a PE Section Header (40 bytes).
+// SectionHeader contains the fields of a 40-byte PE section header.
 type SectionHeader struct {
 	Name                 string
 	VirtualSize          uint32
@@ -33,7 +34,7 @@ type SectionHeader struct {
 	Characteristics      uint32
 }
 
-// Section represents a parsed section with accessor helpers.
+// Section contains a section header and its zero-based index in the section table.
 type Section struct {
 	SectionHeader
 	Index int
@@ -79,7 +80,7 @@ func parseSections(r *SafeReader, offset int64, count uint16, stringTableOffset 
 }
 
 func parseSectionName(raw []byte, r *SafeReader, stringTableOffset int64) (string, error) {
-	// Long section names in COFF: starts with '/' followed by decimal offset into string table.
+	// A COFF long name starts with '/' and a decimal offset into the string table.
 	if raw[0] == '/' && stringTableOffset > 0 {
 		end := bytes.IndexByte(raw[1:], 0)
 		if end < 0 {
@@ -103,7 +104,7 @@ func parseSectionName(raw []byte, r *SafeReader, stringTableOffset int64) (strin
 		return r.ReadASCIIZ(stringTableOffset+int64(offset), limit)
 	}
 
-	// Standard 8-byte ASCII name (null-terminated if < 8 bytes).
+	// An ordinary name occupies eight bytes and may end with NUL padding.
 	idx := bytes.IndexByte(raw, 0)
 	if idx >= 0 {
 		return string(raw[:idx]), nil
@@ -111,11 +112,15 @@ func parseSectionName(raw []byte, r *SafeReader, stringTableOffset int64) (strin
 	return string(raw), nil
 }
 
-// RVAToOffset maps an RVA to a byte present in the input. Header RVAs below
-// SizeOfHeaders map directly. Otherwise the first section in table order whose
-// max(VirtualSize, SizeOfRawData) span contains the RVA wins. Raw padding is
-// addressable; virtual zero-fill, missing bytes and overflowing offsets are not.
-// This is a file-byte mapping policy, not Windows loader emulation.
+// RVAToOffset converts a relative virtual address to a file offset.
+// Header RVAs below SizeOfHeaders map directly. For other RVAs, it selects the
+// first section in table order whose max(VirtualSize, SizeOfRawData) range
+// contains the RVA.
+//
+// For a section RVA, the byte must be in the section's raw data and within
+// the original input. Raw alignment padding can map to an offset.
+// Virtual zero-fill, missing bytes, and overflow return false.
+// This method doesn't emulate the Windows loader.
 func (f *File) RVAToOffset(rva uint32) (uint32, bool) {
 	if rva < f.OptionalHeader.SizeOfHeaders {
 		if int64(rva) >= f.fileSize {
@@ -139,9 +144,10 @@ func (f *File) RVAToOffset(rva uint32) (uint32, bool) {
 	return 0, false
 }
 
-// OffsetToRVA maps an existing file byte in the headers or the first matching
-// raw section to an RVA. Overlays and overflowing RVAs have no mapping. Because
-// malformed sections can overlap, this need not invert RVAToOffset.
+// OffsetToRVA converts a file offset to a relative virtual address.
+// It checks the headers, then the first matching raw section. Offsets outside
+// the original input or those ranges, and RVAs that overflow, return false.
+// If sections overlap, this method might not invert [File.RVAToOffset].
 func (f *File) OffsetToRVA(offset uint32) (uint32, bool) {
 	if int64(offset) >= f.fileSize {
 		return 0, false

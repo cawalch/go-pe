@@ -1,141 +1,183 @@
 # go-pe
 
-A standalone, pure-Go reader for PE32 and PE32+ image headers and sections.
-Go 1.26 or newer; standard library only; MIT licensed.
+go-pe is a Go library for reading Portable Executable (PE) image headers and
+sections. It supports PE32 and PE32+ images, uses only the Go standard library,
+and requires Go 1.26 or later.
 
-**Status: early development.** The core has regression tests, bounded fuzz
-targets and benchmarks. It is not a complete PE analysis engine, a Windows
-loader, or a proven panic-free parser. No release has been published yet.
+The library is in early development. No stable release is available.
 
-## Implemented
+## Supported features
 
-- DOS and COFF file headers, normalized PE32/PE32+ optional headers, and the
-  first 16 data-directory descriptors (not their contents).
-- Section headers and names, including bounded COFF long-name resolution when
-  a symbol-table pointer is present.
-- File-backed RVA/offset translation, section lookup, and DLL/bitness helpers.
-- Bounds-checked little-endian reads and bounded NUL-terminated string reads.
-- `New([]byte)` and `Open(path)`. `Open` reads the entire file into memory.
+You can use go-pe to read:
 
-**Not implemented:** imports/exports, imphash, Authenticode or certificate
-verification, Rich headers, resource/version information, standalone COFF
-objects, ROM images, `io.ReaderAt`, mmap, or lazy directory parsing.
+- DOS headers and Common Object File Format (COFF) file headers within PE images.
+- PE32 and PE32+ optional headers and the first 16 data directory descriptors.
+- Section headers and names, including names stored in a COFF string table.
 
-## Usage
+The library also provides section lookup, dynamic-link library (DLL) and format
+checks, and conversion between relative virtual addresses (RVAs) and file
+offsets. The `SafeReader` utility provides bounds-checked integer and string reads.
 
-```go
-import (
-    "fmt"
-    pe "github.com/cawalch/go-pe"
-)
+go-pe doesn't parse data directory contents, imports, exports, Authenticode
+signatures, Rich headers, resources, or version information. It doesn't calculate
+imphash values or support standalone COFF objects, ROM images, memory-mapped
+input, or `io.ReaderAt`.
 
-f, err := pe.New(data) // data is a []byte containing an on-disk PE image
-if err != nil {
-    return err
-}
-fmt.Printf("machine=%#x sections=%d\n", f.FileHeader.Machine, f.NumberOfSections())
-if offset, ok := f.RVAToOffset(f.OptionalHeader.AddressOfEntryPoint); ok {
-    fmt.Printf("entry-point file offset=%#x\n", offset)
-}
-```
+## Install the library
 
-Use `go get github.com/cawalch/go-pe@main` for the development version.
-No stable release is tagged yet; pin a commit when integrating a consumer.
-
-## Parsing and ownership contract
-
-- `New` reads the input synchronously and retains no reference to it. The result
-  owns its headers and section names, so callers can reuse or release the input
-  after parsing. There is no `Close` requirement or global parser state.
-  Concurrent reads are supported when callers leave the exported fields unchanged.
-  The separate `SafeReader` utility borrows its input for the reader's lifetime.
-- Successful parsing requires complete DOS, signature, COFF, optional-header,
-  and declared section-table bytes. Missing or unsupported optional headers,
-  PE headers overlapping the DOS header, and directory counts exceeding the
-  optional-header space return errors. Errors never accompany a partial `File`.
-- Up to `MaxSections` (256) sections are accepted. This is a resource limit,
-  not a claim about which images Windows can load. All declared section headers
-  are checked before allocating the section array.
-- Long section names must terminate within their declared COFF string table
-  and `MaxSectionNameBytes` (256 bytes, including NUL). Malformed references
-  return errors. Ordinary eight-byte names need no terminator. Symbol records
-  are not decoded, and an unused symbol table is not validated.
-- Directory descriptors are metadata only. A successful parse does not certify
-  directory contents or section bodies. Missing bodies can be inspected through
-  their headers, but address translation cannot return an absent file byte.
-- `ReadASCIIZ` requires a positive bound and a NUL within that bound and the
-  input. It does not silently return an unterminated prefix.
-
-Use `errors.Is` with `ErrNotPE`, `ErrShortDOS`, `ErrInvalidMagic`,
-`ErrInvalidHeader`, `ErrOutOfBounds`, `ErrIntegerOverflow`,
-`ErrUnterminatedString`, and `ErrSectionLimit` as appropriate. These classify
-parser failures; they do not decide an application's detection or trust policy.
-
-### Address translation
-
-Headers below `SizeOfHeaders` map directly if the byte exists. For other RVAs,
-the first section in table order covering the RVA in
-`max(VirtualSize, SizeOfRawData)` wins. Only its raw bytes map: virtual zero-fill,
-arithmetic overflow and missing file bytes return `ok == false`. Raw alignment
-padding is addressable. Reverse translation checks the first matching raw
-section; overlays do not map. Overlapping sections can make the two functions
-non-inverses. This explicit file-byte policy does not emulate the Windows loader
-or promise another parser's malformed-image semantics.
-
-## Scope and existing alternatives
-
-The project began because of unmet Go PE-analysis requirements. That rationale
-must be checked as the ecosystem changes, rather than assuming other parsers
-are absent or unmaintained. Upstream review on **2026-11-11**:
-
-| Alternative | Relevant capabilities and tradeoff |
-| --- | --- |
-| [Go `debug/pe`](https://pkg.go.dev/debug/pe) | Maintained PE/COFF access; useful as an independent oracle for valid headers. Its documentation explicitly excludes adversarial-input hardening. |
-| [saferwall/pe](https://github.com/saferwall/pe) | Broad malware-analysis features and documented fuzzing. The inspected v1.6.5 exposes `NewBytes`, header-only `Fast` mode and per-directory omission options; it is not necessarily an eager full-file analysis. Evaluate these paths before duplicating its features. |
-| [Velocidex/go-pe](https://github.com/Velocidex/go-pe) | The inspected v0.1.0 accepts `io.ReaderAt` and exposes imports, sections, RSDS/PDB and version information. Its short README understates its implementation. |
-| [Binject/debug](https://github.com/Binject/debug) | Extends standard-library parsers with executable writing and relocation editing; a different scope from this reader. |
-
-This core aims for explicit bounds, predictable work and a small dependency
-surface. It has not established overall superiority to these libraries. Prefer
-`encoding/binary` and other standard primitives; assess reuse, dependencies,
-licenses, adversarial behavior and equivalent-work benchmarks before extending
-the parser. Do not grow a generic binary-analysis framework speculatively.
-
-## Consumer integration
-
-`go-pe` has no dependency on go-yara and no YARA schema, module registry, global
-cache, scanner lifecycle, or rule semantics. Any consumer owns input acquisition,
-size limits, cancellation around this bounded synchronous core, and cache lifetime.
-`Open` is a convenience for trusted file sizes, not bounded or cancellable I/O.
-
-A go-yara adapter belongs in go-yara: it should own `pe.*` fields, undefined-value
-behavior, scan-state reset, serialization integration and libyara parity tests.
-Any future expensive directory parsing needs explicit work limits and cancellation
-appropriate for general library callers. `io.ReaderAt` support should be driven
-by measured consumer needs rather than coupled to a scanner's block model.
-
-## Validation and performance
+To install the development version, run the following command in your Go module:
 
 ```sh
-go test -race -cover ./...
-go vet ./...
-go test -run '^$' -fuzz '^FuzzNew$' -fuzztime=30s -parallel=2
-go test -run '^$' -fuzz '^FuzzSafeReader$' -fuzztime=30s -parallel=2
-go test -run '^$' -bench . -benchmem -count=5
+go get github.com/cawalch/go-pe@main
 ```
 
-Fixtures are generated locally; tests need no malware downloads, sibling
-repositories, or network. Valid PE32/PE32+ scalar fields and sections are compared
-with `debug/pe`; this is not malformed-input or full-engine parity. Regressions
-cover header truncation, directory bounds, COFF strings, overflow, zero-fill,
-overlaps, and concurrent reads. Fuzzing checks parser and reader invariants;
-bounded runs are evidence, not proof of safety.
+For reproducible builds, commit the resulting `go.mod` and `go.sum` files. Go
+records a version that identifies the selected commit.
 
-Benchmarks include 1/8/96/256 sections, non-PE rejection, address lookup and a
-standard-library header-only comparison. Record the Go version, CPU and raw
-results when comparing changes. Header parsing allocates a `File`, a section
-slice and names; zero allocation for valid files and fixed nanosecond targets
-are not promised. Header hardening and full DOS-field decoding replace the
-initial prototype's permissive truncation and partial field population.
+## Parse a file
 
-Format reference: [Microsoft PE specification](https://learn.microsoft.com/en-us/windows/win32/debug/pe-format).
+The following program reads a PE file, prints its machine type and section count,
+and converts its entry-point RVA to a file offset. Save it as `main.go`:
+
+```go
+package main
+
+import (
+	"fmt"
+	"log"
+	"os"
+
+	"github.com/cawalch/go-pe"
+)
+
+func main() {
+	if len(os.Args) != 2 {
+		log.Fatal("Usage: inspect FILE")
+	}
+
+	file, err := pe.Open(os.Args[1])
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("Machine: %#x\n", file.FileHeader.Machine)
+	fmt.Printf("Sections: %d\n", file.NumberOfSections())
+
+	rva := file.OptionalHeader.AddressOfEntryPoint
+	if offset, ok := file.RVAToOffset(rva); ok {
+		fmt.Printf("Entry-point file offset: %#x\n", offset)
+	} else {
+		fmt.Println("Entry point has no file offset.")
+	}
+}
+```
+
+To run the program, replace `sample.exe` with the path to your PE file:
+
+```sh
+go run . sample.exe
+```
+
+`Open` reads the entire file into memory. If you need to control input size or
+I/O, acquire the bytes in your application and pass them to `New(data)`.
+
+## Use the parsed metadata
+
+`New` copies header values and section names without retaining the input buffer.
+You can reuse or release the buffer after `New` returns. The returned `File`
+doesn't require a `Close` call.
+
+If you don't modify its exported fields, you can read a `File` from multiple
+goroutines. `SectionByName` returns a pointer into `File.Sections`, so changes through
+that pointer modify the `File`.
+
+Unlike `File`, `SafeReader` retains a reference to its input buffer. Don't modify
+that buffer concurrently with reads.
+
+### Handle malformed input
+
+`New` returns either a complete header snapshot or an error. It requires complete
+DOS and COFF headers, the PE signature, and the declared optional header and
+section table. It rejects missing or unsupported optional headers, PE headers
+that overlap the DOS header, and data directory counts that exceed the optional
+header's capacity.
+
+The following limits bound parsing work:
+
+- `MaxSections` allows up to 256 sections. The parser checks the complete section
+  table before allocating the section slice.
+- `MaxSectionNameBytes` allows up to 256 bytes for a COFF long name, including its
+  terminating NUL byte (`0x00`). The name must also fit within the declared COFF
+  string table. Ordinary eight-byte section names don't need a terminator.
+
+The parser resolves COFF long names when a symbol-table pointer is present. It
+returns an error for an invalid reference. It doesn't decode symbol records or
+validate an unused symbol table.
+
+A successful parse confirms the header structure, not the contents of sections
+or data directories. You can inspect headers when section bodies are missing or
+truncated. These checks don't establish that Windows can load the image.
+
+To classify errors, use `errors.Is` with `ErrNotPE`, `ErrShortDOS`,
+`ErrInvalidMagic`, `ErrInvalidHeader`, `ErrOutOfBounds`, `ErrIntegerOverflow`,
+`ErrUnterminatedString`, or `ErrSectionLimit`.
+
+`SafeReader.ReadASCIIZ` requires a positive read limit and a NUL byte within both
+that limit and the input. It returns an error if no terminator is present.
+
+### Convert addresses
+
+`RVAToOffset` maps an RVA to a byte that existed in the parsed input:
+
+1. An RVA below `SizeOfHeaders` maps directly to the same file offset if that byte
+   existed in the input.
+2. For other RVAs, the method selects the first section in table order whose
+   range contains the RVA. The range starts at `VirtualAddress` and spans
+   `max(VirtualSize, SizeOfRawData)` bytes.
+3. The method returns an offset only if the selected section contains the byte
+   in its raw data and the offset fits within the original input.
+
+Raw alignment padding can map to a file offset. Virtual zero-fill, arithmetic
+overflow, and missing bytes return `ok == false`.
+
+`OffsetToRVA` checks the headers, then the first matching raw section. File data
+outside those ranges has no mapping. Overlapping sections can prevent the two
+methods from being inverses. These methods don't emulate the Windows loader or
+another parser's behavior for malformed images.
+
+The certificate data directory stores a file offset in its `VirtualAddress`
+field. Don't pass that value to `RVAToOffset`.
+
+## Integrate with an application
+
+go-pe is independent of go-yara and other scanners. Your application controls
+input acquisition, input size limits, cancellation, and cache lifetime. Parsing
+is synchronous; `Open` doesn't provide bounded or cancellable I/O.
+
+Keep scanner adapters in the consuming project. For example, a go-yara adapter
+owns YARA fields, undefined values, scan-state reset, and compatibility with
+libyara. These behaviors aren't part of go-pe's API.
+
+## Related libraries
+
+Other Go libraries provide PE analysis features beyond this parser's scope.
+The following descriptions reflect the source reviewed on November 11, 2026:
+
+| Library | Capabilities |
+| --- | --- |
+| [Go `debug/pe`](https://pkg.go.dev/debug/pe) | PE and COFF access. Its documentation excludes hardening for adversarial input. |
+| [saferwall/pe](https://github.com/saferwall/pe) | Malware analysis features. Version 1.6.5 supports byte-slice input, a `Fast` mode that skips data directories, and options to skip individual directories. |
+| [Velocidex/go-pe](https://github.com/Velocidex/go-pe) | Version 0.1.0 accepts `io.ReaderAt` and reads imports, sections, debug metadata, and version information. |
+| [Binject/debug](https://github.com/Binject/debug) | Extends standard-library parsers with executable writing and relocation editing. |
+
+## Contribute
+
+See [Contributing](CONTRIBUTING.md) for validation commands, feature scope, and
+documentation style. The tests use generated fixtures and require no malware
+samples, sibling repositories, or network access after you install Go.
+
+## References
+
+- [API reference](https://pkg.go.dev/github.com/cawalch/go-pe)
+- [Microsoft PE specification](https://learn.microsoft.com/en-us/windows/win32/debug/pe-format)
+- [MIT license](LICENSE)

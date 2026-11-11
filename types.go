@@ -1,19 +1,19 @@
 package pe
 
-// DOS & PE Signatures.
+// DOS and PE signatures.
 const (
 	DOSMagic = 0x5A4D     // "MZ"
 	PEMagic  = 0x00004550 // "PE\0\0"
 )
 
-// Optional Header Magic.
+// Optional header magic numbers.
 const (
 	OptionalHeaderMagicPE32  = 0x10b // 32-bit executable
 	OptionalHeaderMagicPE32P = 0x20b // 64-bit executable (PE32+)
 	OptionalHeaderMagicROM   = 0x107 // ROM image
 )
 
-// Data Directory Indices.
+// Data directory indices.
 const (
 	DataDirectoryExport       = 0
 	DataDirectoryImport       = 1
@@ -34,7 +34,7 @@ const (
 	NumberOfDataDirectories   = 16
 )
 
-// Machine Types (COFF File Header).
+// Machine types in the COFF file header.
 const (
 	MachineUnknown   = 0x0
 	MachineI386      = 0x14c
@@ -86,7 +86,7 @@ const (
 	SubsystemWindowsBootApplication = 16
 )
 
-// Characteristics (COFF File Header).
+// COFF file header characteristics.
 const (
 	CharacteristicsRelocsStripped       = 0x0001
 	CharacteristicsExecutableImage      = 0x0002
@@ -105,7 +105,7 @@ const (
 	CharacteristicsBytesReversedHi      = 0x8000
 )
 
-// Section Characteristics.
+// Section characteristics.
 const (
 	SectionTypeNoPad            = 0x00000008
 	SectionCntCode              = 0x00000020

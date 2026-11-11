@@ -5,8 +5,8 @@ import (
 	"os"
 )
 
-// File is a snapshot of a PE image's headers and sections. Concurrent reads are
-// safe provided callers do not modify the exported fields.
+// File contains a snapshot of a PE image's headers and sections.
+// If you don't modify its exported fields, you can read a File concurrently.
 type File struct {
 	DOSHeader      DOSHeader
 	FileHeader     FileHeader
@@ -16,8 +16,9 @@ type File struct {
 	fileSize int64
 }
 
-// Open reads the entire named file into memory and parses its headers and section
-// table. For caller-controlled input size and I/O, use New instead.
+// Open reads the entire named file into memory and parses its headers and
+// section table. If you need to control input size or I/O, read the bytes
+// in your application and pass them to [New].
 func Open(filename string) (*File, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
@@ -26,14 +27,16 @@ func Open(filename string) (*File, error) {
 	return New(data)
 }
 
-// New parses complete PE32 or PE32+ headers and the declared section table.
-// It does not validate the Windows loader's requirements or parse section bodies.
-// Truncated headers return an error; truncated section bodies remain inspectable,
-// but address translation will not return offsets outside data.
+// New parses PE32 or PE32+ headers and the declared section table.
+// It returns an error if the headers are incomplete or invalid. It doesn't
+// validate the Windows loader's requirements or parse section bodies.
 //
-// New reads data synchronously and retains no reference to it. The returned
-// metadata and section names are owned by the File; callers may reuse or release
-// data after New returns. No global state is used.
+// New reads data synchronously. The returned [File] owns its metadata and section
+// names and retains no reference to data. You can reuse or release data after
+// New returns.
+//
+// If section bodies are truncated, you can still inspect their headers.
+// Address translation returns offsets only for bytes within the original input.
 func New(data []byte) (*File, error) {
 	r := NewSafeReader(data)
 
@@ -88,22 +91,23 @@ func New(data []byte) (*File, error) {
 	}, nil
 }
 
-// IsDLL returns true if the Characteristics indicates a dynamic-link library.
+// IsDLL reports whether the COFF characteristics mark the image as a
+// dynamic-link library (DLL).
 func (f *File) IsDLL() bool {
 	return f.FileHeader.Characteristics&CharacteristicsDLL != 0
 }
 
-// Is64Bit returns true if the binary targets 64-bit architecture (PE32+).
+// Is64Bit reports whether the file uses the PE32+ optional header format.
 func (f *File) Is64Bit() bool {
 	return f.OptionalHeader.Magic == OptionalHeaderMagicPE32P
 }
 
-// Is32Bit returns true if the binary targets 32-bit architecture (PE32).
+// Is32Bit reports whether the file uses the PE32 optional header format.
 func (f *File) Is32Bit() bool {
 	return f.OptionalHeader.Magic == OptionalHeaderMagicPE32
 }
 
-// NumberOfSections returns the total count of parsed sections.
+// NumberOfSections returns the number of parsed sections.
 func (f *File) NumberOfSections() int {
 	return len(f.Sections)
 }
