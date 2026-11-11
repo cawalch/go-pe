@@ -2,7 +2,7 @@ package pe
 
 // DOS & PE Signatures.
 const (
-	DOSMagic = 0x5A4D // "MZ"
+	DOSMagic = 0x5A4D     // "MZ"
 	PEMagic  = 0x00004550 // "PE\0\0"
 )
 
@@ -15,23 +15,23 @@ const (
 
 // Data Directory Indices.
 const (
-	DataDirectoryExport         = 0
-	DataDirectoryImport         = 1
-	DataDirectoryResource       = 2
-	DataDirectoryException      = 3
-	DataDirectoryCertificate    = 4
-	DataDirectoryBaseReloc      = 5
-	DataDirectoryDebug          = 6
-	DataDirectoryArchitecture   = 7
-	DataDirectoryGlobalPtr      = 8
-	DataDirectoryTLS            = 9
-	DataDirectoryLoadConfig     = 10
-	DataDirectoryBoundImport    = 11
-	DataDirectoryIAT            = 12
-	DataDirectoryDelayImport    = 13
-	DataDirectoryCLRRuntime     = 14
-	DataDirectoryReserved       = 15
-	NumberOfDataDirectories     = 16
+	DataDirectoryExport       = 0
+	DataDirectoryImport       = 1
+	DataDirectoryResource     = 2
+	DataDirectoryException    = 3
+	DataDirectoryCertificate  = 4
+	DataDirectoryBaseReloc    = 5
+	DataDirectoryDebug        = 6
+	DataDirectoryArchitecture = 7
+	DataDirectoryGlobalPtr    = 8
+	DataDirectoryTLS          = 9
+	DataDirectoryLoadConfig   = 10
+	DataDirectoryBoundImport  = 11
+	DataDirectoryIAT          = 12
+	DataDirectoryDelayImport  = 13
+	DataDirectoryCLRRuntime   = 14
+	DataDirectoryReserved     = 15
+	NumberOfDataDirectories   = 16
 )
 
 // Machine Types (COFF File Header).

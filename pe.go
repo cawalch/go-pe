@@ -5,18 +5,19 @@ import (
 	"os"
 )
 
-// File represents a parsed PE binary.
+// File is a snapshot of a PE image's headers and sections. Concurrent reads are
+// safe provided callers do not modify the exported fields.
 type File struct {
 	DOSHeader      DOSHeader
 	FileHeader     FileHeader
 	OptionalHeader OptionalHeader
 	Sections       []Section
 
-	// Internal safe reader
-	reader *SafeReader
+	fileSize int64
 }
 
-// Open opens a named file and parses its PE headers and section table.
+// Open reads the entire named file into memory and parses its headers and section
+// table. For caller-controlled input size and I/O, use New instead.
 func Open(filename string) (*File, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
@@ -25,44 +26,53 @@ func Open(filename string) (*File, error) {
 	return New(data)
 }
 
-// New parses a PE binary directly from an in-memory byte slice.
+// New parses complete PE32 or PE32+ headers and the declared section table.
+// It does not validate the Windows loader's requirements or parse section bodies.
+// Truncated headers return an error; truncated section bodies remain inspectable,
+// but address translation will not return offsets outside data.
+//
+// New reads data synchronously and retains no reference to it. The returned
+// metadata and section names are owned by the File; callers may reuse or release
+// data after New returns. No global state is used.
 func New(data []byte) (*File, error) {
 	r := NewSafeReader(data)
 
-	// Step 1: Parse DOS Header
 	dos, err := parseDOSHeader(r)
 	if err != nil {
 		return nil, err
 	}
 
-	// Step 2: Check PE Signature
 	peOffset := int64(dos.AddressOfNewEXEHeader)
+	if peOffset < 64 {
+		return nil, fmt.Errorf("%w: PE header overlaps DOS header", ErrInvalidHeader)
+	}
 	sig, err := r.ReadUint32(peOffset)
-	if err != nil || sig != PEMagic {
-		return nil, ErrNotPE
+	if err != nil {
+		return nil, fmt.Errorf("reading PE signature: %w", err)
+	}
+	if sig != PEMagic {
+		return nil, fmt.Errorf("%w: %w", ErrNotPE, ErrInvalidMagic)
 	}
 
-	// Step 3: Parse COFF File Header (20 bytes following PE\0\0)
+	// The 20-byte COFF file header follows the PE signature.
 	coffOffset := peOffset + 4
 	coff, err := parseFileHeader(r, coffOffset)
 	if err != nil {
 		return nil, err
 	}
 
-	// Step 4: Parse Optional Header
 	optOffset := coffOffset + 20
 	opt, err := parseOptionalHeader(r, optOffset, coff.SizeOfOptionalHeader)
 	if err != nil {
 		return nil, err
 	}
 
-	// Step 5: Compute string table offset if COFF symbols are present
-	var stringTableOffset uint32
-	if coff.PointerToSymbolTable > 0 && coff.NumberOfSymbols > 0 {
-		stringTableOffset = coff.PointerToSymbolTable + (coff.NumberOfSymbols * 18)
+	var stringTableOffset int64
+	if coff.PointerToSymbolTable > 0 {
+		// Widen before arithmetic; both COFF fields are untrusted uint32s.
+		stringTableOffset = int64(coff.PointerToSymbolTable) + int64(coff.NumberOfSymbols)*18
 	}
 
-	// Step 6: Parse Section Table
 	sectionTableOffset := optOffset + int64(coff.SizeOfOptionalHeader)
 	sections, err := parseSections(r, sectionTableOffset, coff.NumberOfSections, stringTableOffset)
 	if err != nil {
@@ -74,7 +84,7 @@ func New(data []byte) (*File, error) {
 		FileHeader:     coff,
 		OptionalHeader: opt,
 		Sections:       sections,
-		reader:         r,
+		fileSize:       int64(len(data)),
 	}, nil
 }
 
@@ -98,7 +108,8 @@ func (f *File) NumberOfSections() int {
 	return len(f.Sections)
 }
 
-// SectionByName searches for the first section matching the given name.
+// SectionByName returns a pointer into Sections for the first matching name,
+// or nil. Modifying the returned section modifies the File.
 func (f *File) SectionByName(name string) *Section {
 	for i := range f.Sections {
 		if f.Sections[i].Name == name {

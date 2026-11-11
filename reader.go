@@ -1,6 +1,7 @@
 package pe
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 )
@@ -10,16 +11,19 @@ var (
 	ErrOutOfBounds = errors.New("read out of bounds")
 	// ErrIntegerOverflow indicates an invalid offset or length causing arithmetic overflow.
 	ErrIntegerOverflow = errors.New("integer overflow in offset arithmetic")
+	// ErrUnterminatedString indicates no NUL within the bounded string read.
+	ErrUnterminatedString = errors.New("unterminated string")
 )
 
-// SafeReader provides bounds-checked, zero-panic primitive reading operations
-// over an in-memory byte slice or io.ReaderAt source.
+// SafeReader provides bounds-checked primitive reading operations
+// over a borrowed in-memory byte slice. The zero value reads an empty buffer.
 type SafeReader struct {
 	data []byte
 	size int64
 }
 
-// NewSafeReader wraps a byte slice in a SafeReader.
+// NewSafeReader borrows a byte slice without copying it. Callers must not mutate
+// the slice concurrently with reads.
 func NewSafeReader(data []byte) *SafeReader {
 	return &SafeReader{
 		data: data,
@@ -38,7 +42,10 @@ func (r *SafeReader) Slice(offset int64, length int64) ([]byte, error) {
 		return nil, ErrOutOfBounds
 	}
 	end := offset + length
-	if end < offset || end > r.size {
+	if end < offset {
+		return nil, ErrIntegerOverflow
+	}
+	if end > r.size {
 		return nil, ErrOutOfBounds
 	}
 	return r.data[offset:end], nil
@@ -79,22 +86,22 @@ func (r *SafeReader) ReadUint64(offset int64) (uint64, error) {
 	return binary.LittleEndian.Uint64(b), nil
 }
 
-// ReadASCIIZ reads a null-terminated ASCII string up to maxLen bytes.
+// ReadASCIIZ reads through the first NUL in at most maxLen bytes. The terminator
+// must be present within that bound and the input; it is not included in the
+// returned string. A nonpositive bound is rejected. Bytes are not transcoded.
 func (r *SafeReader) ReadASCIIZ(offset int64, maxLen int64) (string, error) {
-	if offset < 0 || offset >= r.size {
+	if offset < 0 || offset >= r.size || maxLen <= 0 {
 		return "", ErrOutOfBounds
 	}
 	available := r.size - offset
-	if maxLen <= 0 || maxLen > available {
+	if maxLen > available {
 		maxLen = available
 	}
 	b := r.data[offset : offset+maxLen]
-	for i, c := range b {
-		if c == 0 {
-			return string(b[:i]), nil
-		}
+	if i := bytes.IndexByte(b, 0); i >= 0 {
+		return string(b[:i]), nil
 	}
-	return string(b), nil
+	return "", ErrUnterminatedString
 }
 
 // CheckBounds verifies that [offset : offset+length] resides entirely within bounds.

@@ -1,0 +1,31 @@
+name: Go
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      matrix:
+        go: ['1.26.x', stable]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ matrix.go }}
+          cache: false # No external dependencies or go.sum.
+      - name: Format and vet
+        run: |
+          test -z "$(gofmt -l .)"
+          go vet ./...
+      - run: go test -race -cover ./...
+      - name: Test 32-bit arithmetic
+        run: GOARCH=386 go test ./...
+      - name: Bounded fuzz smoke tests
+        if: matrix.go == 'stable'
+        run: |
+          go test -run '^$' -fuzz '^FuzzNew$' -fuzztime=15s -parallel=2
+          go test -run '^$' -fuzz '^FuzzSafeReader$' -fuzztime=15s -parallel=2

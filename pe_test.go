@@ -3,13 +3,15 @@ package pe
 import (
 	"encoding/binary"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
 // buildMinimalPE creates a synthetically valid minimal PE32+ executable.
 func buildMinimalPE(numSections int) []byte {
 	// DOS Header: 64 bytes
-	data := make([]byte, 512)
+	headerSize := (392 + numSections*40 + 511) &^ 511
+	data := make([]byte, headerSize+numSections*512)
 	data[0] = 'M'
 	data[1] = 'Z'
 	binary.LittleEndian.PutUint32(data[0x3c:], 0x80) // e_lfanew = 128
@@ -22,7 +24,7 @@ func buildMinimalPE(numSections int) []byte {
 	binary.LittleEndian.PutUint16(coff[0:], MachineAMD64)
 	binary.LittleEndian.PutUint16(coff[2:], uint16(numSections))
 	binary.LittleEndian.PutUint32(coff[4:], 1700000000) // Timestamp
-	binary.LittleEndian.PutUint16(coff[16:], 240)        // SizeOfOptionalHeader
+	binary.LittleEndian.PutUint16(coff[16:], 240)       // SizeOfOptionalHeader
 	binary.LittleEndian.PutUint16(coff[18:], CharacteristicsExecutableImage|CharacteristicsLargeAddressAware)
 
 	// Optional Header at 152 (PE32+ is 240 bytes)
@@ -34,6 +36,7 @@ func buildMinimalPE(numSections int) []byte {
 	binary.LittleEndian.PutUint64(opt[24:], 0x140000000)             // ImageBase
 	binary.LittleEndian.PutUint32(opt[32:], 0x1000)                  // SectionAlignment
 	binary.LittleEndian.PutUint32(opt[36:], 0x200)                   // FileAlignment
+	binary.LittleEndian.PutUint32(opt[60:], uint32(headerSize))      // SizeOfHeaders
 	binary.LittleEndian.PutUint16(opt[68:], SubsystemWindowsGUI)     // Subsystem
 	binary.LittleEndian.PutUint32(opt[108:], NumberOfDataDirectories)
 
@@ -48,10 +51,10 @@ func buildMinimalPE(numSections int) []byte {
 			name = ".rsrc"
 		}
 		copy(sec[:8], []byte(name))
-		binary.LittleEndian.PutUint32(sec[8:], 0x1000)                                                  // VirtualSize
-		binary.LittleEndian.PutUint32(sec[12:], uint32(0x1000*(i+1)))                                   // VirtualAddress
-		binary.LittleEndian.PutUint32(sec[16:], 0x200)                                                   // SizeOfRawData
-		binary.LittleEndian.PutUint32(sec[20:], uint32(0x200*(i+1)))                                    // PointerToRawData
+		binary.LittleEndian.PutUint32(sec[8:], 0x1000)                                           // VirtualSize
+		binary.LittleEndian.PutUint32(sec[12:], uint32(0x1000*(i+1)))                            // VirtualAddress
+		binary.LittleEndian.PutUint32(sec[16:], 0x200)                                           // SizeOfRawData
+		binary.LittleEndian.PutUint32(sec[20:], uint32(headerSize+512*i))                        // PointerToRawData
 		binary.LittleEndian.PutUint32(sec[36:], SectionMemExecute|SectionMemRead|SectionCntCode) // Characteristics
 	}
 
@@ -99,30 +102,17 @@ func TestValidPEParsing(t *testing.T) {
 	}
 }
 
-func TestDummySamplesInTestData(t *testing.T) {
-	// The dummy samples in testdata/performance have valid DOS + PE signatures
-	// but zero COFF / Optional header fields. They should parse gracefully without panicking.
-	samples := []string{
-		"/Users/cawalch/go-yara/testdata/performance/clean_program.exe",
-		"/Users/cawalch/go-yara/testdata/performance/miner_sample.exe",
-		"/Users/cawalch/go-yara/testdata/performance/banker_sample.dll",
-		"/Users/cawalch/go-yara/testdata/performance/ransomware_sample.exe",
-		"/Users/cawalch/go-yara/testdata/performance/ddos_bot_sample.exe",
+func TestOpen(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sample.exe")
+	if err := os.WriteFile(path, buildMinimalPE(2), 0600); err != nil {
+		t.Fatal(err)
 	}
-
-	for _, path := range samples {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-		peFile, err := New(data)
-		if err != nil {
-			t.Errorf("failed to parse %s: %v", path, err)
-			continue
-		}
-		if peFile == nil {
-			t.Errorf("%s returned nil peFile", path)
-		}
+	f, err := Open(path)
+	if err != nil || f == nil || f.NumberOfSections() != 2 {
+		t.Fatalf("Open = (%v, %v)", f, err)
+	}
+	if _, err := Open(path + ".missing"); !os.IsNotExist(err) {
+		t.Fatalf("missing file: %v", err)
 	}
 }
 
