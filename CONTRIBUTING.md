@@ -47,9 +47,13 @@ For parser or reader changes, run the applicable fuzz target:
 ```sh
 go test -run '^$' -fuzz '^FuzzNew$' -fuzztime=30s -parallel=2
 go test -run '^$' -fuzz '^FuzzSafeReader$' -fuzztime=30s -parallel=2
+go test -run '^$' -fuzz '^FuzzImports$' -fuzztime=30s -parallel=2
 ```
 
-The tests compare PE32 and PE32+ header fields and sections with `debug/pe`. They
+The tests compare PE32 and PE32+ headers, sections, and ordinary named imports
+with `debug/pe`. The import comparison uses synthetic files and PE fixtures in
+the Go toolchain. Separate tests cover ordinal imports, lookup-table fallback,
+section bounds, resource limits, and malformed import records. The tests
 also cover truncation, directory bounds, COFF strings, arithmetic overflow,
 address mapping, and concurrent reads. These comparisons and bounded fuzz runs
 don't establish full format compatibility or prove that all inputs are safe.
@@ -64,5 +68,8 @@ go test -run '^$' -bench . -benchmem -count=5
 
 Record the Go version, CPU, workload, and raw results. Benchmarks cover parsing
 1, 8, 96, and 256 sections, rejecting non-PE input, and translating addresses.
-The `debug/pe` comparison measures header parsing; the libraries perform different
-amounts of work, so it doesn't establish overall performance superiority.
+Import benchmarks measure repeated parsing from a header snapshot, an absent
+directory, and rejection at the total symbol limit. Separate `debug/pe`
+comparisons measure header parsing and headers with named imports. The libraries
+return different representations and perform different checks, so these results
+don't establish overall performance superiority.
