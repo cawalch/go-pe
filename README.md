@@ -1,8 +1,8 @@
 # go-pe
 
-go-pe is a Go library for reading Portable Executable (PE) image headers and
-sections. It supports PE32 and PE32+ images, uses only the Go standard library,
-and requires Go 1.26 or later.
+go-pe is a Go library for reading Portable Executable (PE) image headers,
+sections, and standard imports. It supports PE32 and PE32+ images, uses only the
+Go standard library, and requires Go 1.26 or later.
 
 The library is in early development. No stable release is available.
 
@@ -13,15 +13,16 @@ You can use go-pe to read:
 - DOS headers and Common Object File Format (COFF) file headers within PE images.
 - PE32 and PE32+ optional headers and the first 16 data directory descriptors.
 - Section headers and names, including names stored in a COFF string table.
+- Standard import descriptors, DLL names, and imports by name and hint or ordinal.
 
 The library also provides section lookup, dynamic-link library (DLL) and format
 checks, and conversion between relative virtual addresses (RVAs) and file
 offsets. The `SafeReader` utility provides bounds-checked integer and string reads.
 
-go-pe doesn't parse data directory contents, imports, exports, Authenticode
-signatures, Rich headers, resources, or version information. It doesn't calculate
-imphash values or support standalone COFF objects, ROM images, memory-mapped
-input, or `io.ReaderAt`.
+go-pe doesn't parse delayed imports, exports, Authenticode signatures, Rich
+headers, resources, or version information. It doesn't resolve bound import
+addresses or calculate imphash values. It doesn't support standalone COFF
+objects, ROM images, loaded-memory images, memory-mapped input, or `io.ReaderAt`.
 
 ## Install the library
 
@@ -36,7 +37,7 @@ records a version that identifies the selected commit.
 
 ## Parse a file
 
-The following program reads a PE file, prints its machine type and section count,
+The following program reads a PE file, prints its headers and standard imports,
 and converts its entry-point RVA to a file offset. Save it as `main.go`:
 
 ```go
@@ -55,7 +56,11 @@ func main() {
 		log.Fatal("Usage: inspect FILE")
 	}
 
-	file, err := pe.Open(os.Args[1])
+	data, err := os.ReadFile(os.Args[1])
+	if err != nil {
+		log.Fatal(err)
+	}
+	file, err := pe.New(data)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -69,6 +74,20 @@ func main() {
 	} else {
 		fmt.Println("Entry point has no file offset.")
 	}
+
+	libraries, err := file.Imports(data)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, library := range libraries {
+		for _, symbol := range library.Symbols {
+			if symbol.ByOrdinal {
+				fmt.Printf("%s: ordinal %d\n", library.DLL, symbol.Ordinal)
+			} else {
+				fmt.Printf("%s: %s (hint %d)\n", library.DLL, symbol.Name, symbol.Hint)
+			}
+		}
+	}
 }
 ```
 
@@ -78,14 +97,16 @@ To run the program, replace `sample.exe` with the path to your PE file:
 go run . sample.exe
 ```
 
-`Open` reads the entire file into memory. If you need to control input size or
-I/O, acquire the bytes in your application and pass them to `New(data)`.
+For headers and sections alone, you can use `Open(path)`. It reads the entire file
+into memory and calls `New`. Neither function parses imports. If you need to
+control input size or I/O, acquire the bytes in your application and pass them to
+`New(data)`.
 
 ## Use the parsed metadata
 
 `New` copies header values and section names without retaining the input buffer.
-You can reuse or release the buffer after `New` returns. The returned `File`
-doesn't require a `Close` call.
+You can reuse or release the buffer after `New` returns unless you plan to pass
+it to `Imports`. The returned `File` doesn't require a `Close` call.
 
 If you don't modify its exported fields, you can read a `File` from multiple
 goroutines. `SectionByName` returns a pointer into `File.Sections`, so changes through
@@ -93,6 +114,41 @@ that pointer modify the `File`.
 
 Unlike `File`, `SafeReader` retains a reference to its input buffer. Don't modify
 that buffer concurrently with reads.
+
+### Read standard imports
+
+Call `file.Imports(data)` with the original bytes passed to `New`. The method
+returns owned DLL and symbol records in file order, preserving spelling and
+duplicates. It doesn't retain the input, modify `File`, or cache results. Don't
+modify the input or `File` during a call. Names preserve their bytes without
+validating their encoding.
+
+The parser uses the import lookup table when present. If its RVA is zero, the
+parser uses the import address table only when the descriptor's timestamp is
+zero. A bound image with a lookup table is supported; a bound image without one
+returns `ErrInvalidImport`. The parser doesn't read the address table when a
+lookup table is available.
+
+A missing import directory returns `nil, nil`. A malformed or unsupported
+directory returns an error and no partial results. Descriptors must end with a
+zero descriptor within the declared directory size. Lookup tables and names
+must terminate within their selected raw section or header range, the original
+file size, and the supplied input. Virtual zero-fill doesn't supply missing
+terminators.
+
+The following limits apply to each call:
+
+| Limit | Maximum |
+| --- | --- |
+| `MaxImportLibraries` | 1,024 descriptors |
+| `MaxImportSymbols` | 65,536 symbols across all descriptors |
+| `MaxImportNameBytes` | 4,096 bytes per name, including the NUL terminator |
+| `MaxImportStringBytes` | 1 MiB of names, including NUL terminators and repeated references |
+
+These limits bound parsing work and output. They aren't Windows loader limits.
+Use `errors.Is` with `ErrInvalidImport`, `ErrImportLimit`, or the bounds and
+string errors listed below to classify failures. An overlong name returns
+`ErrUnterminatedString` when no NUL byte occurs within `MaxImportNameBytes`.
 
 ### Handle malformed input
 
@@ -173,8 +229,9 @@ The following descriptions reflect the source reviewed on November 11, 2026:
 ## Contribute
 
 See [Contributing](CONTRIBUTING.md) for validation commands, feature scope, and
-documentation style. The tests use generated fixtures and require no malware
-samples, sibling repositories, or network access after you install Go.
+documentation style. The tests use generated fixtures and Go toolchain PE
+fixtures. They require no malware samples, sibling repositories, or network
+access after you install Go.
 
 ## References
 

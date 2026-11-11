@@ -29,3 +29,4 @@ jobs:
         run: |
           go test -run '^$' -fuzz '^FuzzNew$' -fuzztime=15s -parallel=2
           go test -run '^$' -fuzz '^FuzzSafeReader$' -fuzztime=15s -parallel=2
+          go test -run '^$' -fuzz '^FuzzImports$' -fuzztime=15s -parallel=2
