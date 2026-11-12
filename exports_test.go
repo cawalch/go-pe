@@ -51,7 +51,7 @@ func TestExports(t *testing.T) {
 			copy(data[forwarder:], "other.#123\x00")
 			binary.LittleEndian.PutUint32(data[552+12:], exportRVA(forwarder))
 			got, err := parseTestExports(t, data)
-			want := &ExportDirectory{DLL: "example.dll", TimeDateStamp: 0x12345678, MajorVersion: 2, MinorVersion: 3, OrdinalBase: 7,
+			want := &ExportDirectory{DLL: "example.dll", DLLNameRVA: 0x1050, TimeDateStamp: 0x12345678, MajorVersion: 2, MinorVersion: 3, OrdinalBase: 7,
 				Symbols: []ExportSymbol{
 					{Ordinal: 7, RVA: 0x10000000, Names: []string{"Function00000", "Function00000", "", "Function00003"}},
 					{Ordinal: 8, RVA: 0x10000004}, {Ordinal: 9},
@@ -68,6 +68,28 @@ func TestExports(t *testing.T) {
 	}
 }
 
+func TestExportsDLLNameRVA(t *testing.T) {
+	for _, is64 := range []bool{false, true} {
+		for _, count := range []int{0, 2} {
+			data := testfixture.Exports(is64, count)
+			for _, tc := range []struct {
+				rva uint32
+				dll string
+			}{
+				{binary.LittleEndian.Uint32(data[524:]), "example.dll"},
+				{0, ""},
+				{exportRVA(len(data) - 1), ""},
+			} {
+				binary.LittleEndian.PutUint32(data[524:], tc.rva)
+				got, err := parseTestExports(t, data)
+				if err != nil || got.DLLNameRVA != tc.rva || got.DLL != tc.dll || len(got.Symbols) != count {
+					t.Fatalf("PE64=%t count=%d RVA=%#x DLL=%q: %+v %v", is64, count, tc.rva, tc.dll, got, err)
+				}
+			}
+		}
+	}
+}
+
 func TestExportsNameAndForwarderPolicy(t *testing.T) {
 	for _, is64 := range []bool{false, true} {
 		data := testfixture.Exports(is64, 2)
@@ -81,7 +103,7 @@ func TestExportsNameAndForwarderPolicy(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got.DLL != "" || got.Symbols[0].Names[0] != "\xffodd-name" ||
+		if got.DLLNameRVA != 0 || got.DLL != "" || got.Symbols[0].Names[0] != "\xffodd-name" ||
 			!got.Symbols[1].Forwarded || got.Symbols[1].Forwarder != "" {
 			t.Fatalf("raw metadata: %+v", got)
 		}
@@ -154,6 +176,7 @@ func TestExportsCrossSectionTable(t *testing.T) {
 		binary.LittleEndian.PutUint32(data[pointers+4:], 0x20000010)
 		copy(data[0x1f0:], "example.dll\x00")
 		binary.LittleEndian.PutUint32(data[524:], 0x1f0)
+		want.DLLNameRVA = 0x1f0
 		got, err := parseTestExports(t, data)
 		if err != nil || !reflect.DeepEqual(got, want) {
 			t.Fatalf("cross-section tables: %+v, %v; want %+v", got, err, want)

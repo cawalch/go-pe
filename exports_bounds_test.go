@@ -29,6 +29,20 @@ func TestExportsBounds(t *testing.T) {
 			{"zero_name_pointer", func(d []byte) { binary.LittleEndian.PutUint32(d[exportTableOffset(d, 32):], 0) }, ErrInvalidExport},
 			{"unmapped_name", func(d []byte) { binary.LittleEndian.PutUint32(d[exportTableOffset(d, 32):], 0xffffffff) }, ErrOutOfBounds},
 			{"unmapped_dll", func(d []byte) { binary.LittleEndian.PutUint32(d[524:], 0xffffffff) }, ErrOutOfBounds},
+			{"dll_past_file", func(d []byte) { binary.LittleEndian.PutUint32(d[524:], exportRVA(len(d))) }, ErrOutOfBounds},
+			{"dll_file_bound", func(d []byte) {
+				binary.LittleEndian.PutUint32(d[524:], exportRVA(len(d)-1))
+				d[len(d)-1] = 'X'
+			}, ErrUnterminatedString},
+			{"dll_header_bound", func(d []byte) {
+				binary.LittleEndian.PutUint32(d[524:], 511)
+				d[511] = 'X' // A NUL in the next section must not terminate this name.
+			}, ErrUnterminatedString},
+			{"dll_section_bound", func(d []byte) {
+				binary.LittleEndian.PutUint32(d[524:], exportRVA(len(d)-2))
+				binary.LittleEndian.PutUint32(d[exportSectionOffset(is64)+16:], uint32(len(d)-513))
+				d[len(d)-2] = 'X' // The final NUL is outside the section's raw data.
+			}, ErrUnterminatedString},
 			{"virtual_tail", func(d []byte) { binary.LittleEndian.PutUint32(d[exportSectionOffset(is64)+16:], 39) }, ErrOutOfBounds},
 			{"forwarder_directory_bound", func(d []byte) {
 				end := 512 + int(binary.LittleEndian.Uint32(d[exportDirectoryOffset(is64)+4:]))
@@ -121,6 +135,13 @@ func TestExportsRVAEnd(t *testing.T) {
 		if err != nil || !got.Symbols[0].Forwarded || got.Symbols[0].Forwarder != "" {
 			t.Fatalf("final RVA byte: %+v %v", got, err)
 		}
+		dllRVA := binary.LittleEndian.Uint32(d[524:])
+		binary.LittleEndian.PutUint32(d[524:], math.MaxUint32)
+		got, err = parseTestExports(t, d)
+		if err != nil || got.DLLNameRVA != math.MaxUint32 || got.DLL != "" {
+			t.Fatalf("DLL name at final RVA byte: %+v %v", got, err)
+		}
+		binary.LittleEndian.PutUint32(d[524:], dllRVA)
 		d[1023] = 'X'
 		if got, err := parseTestExports(t, d); got != nil || !errors.Is(err, ErrUnterminatedString) {
 			t.Fatalf("unterminated final RVA: %+v %v", got, err)

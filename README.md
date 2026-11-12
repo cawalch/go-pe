@@ -169,7 +169,13 @@ Names preserve their bytes without encoding checks or case folding.
 `Forwarder` contains the raw NUL-terminated string, which can be empty. The
 parser doesn't validate its syntax or resolve other DLLs. Ordinary target RVAs
 are returned without dereferencing them; they can refer to virtual zero-fill or
-unmapped data. A missing DLL-name RVA yields an empty `DLL` string.
+unmapped data.
+
+`DLLNameRVA` preserves the export directory's raw DLL-name RVA. Zero means the
+name is absent and `DLL` is empty. A nonzero RVA can point to a present empty
+string, so use `DLLNameRVA` to distinguish these cases. `DLL` continues to hold
+the decoded name. Nonzero name RVAs use the same bounds and terminator checks
+as other export strings.
 
 Tables and strings must fit within their selected raw section or header range,
 the original file size, and the supplied bytes. Forwarder strings must also

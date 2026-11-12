@@ -18,6 +18,11 @@ func FuzzExports(f *testing.F) {
 		binary.LittleEndian.PutUint16(data[exportTableOffset(data, 36)+2:], 0)
 		binary.LittleEndian.PutUint32(data[552:], binary.LittleEndian.Uint32(data[exportTableOffset(data, 32):]))
 		f.Add(is64, true, data[512:])
+		for _, rva := range []uint32{0, exportRVA(len(data) - 1)} {
+			seed := testfixture.Exports(is64, 3)
+			binary.LittleEndian.PutUint32(seed[524:], rva)
+			f.Add(is64, true, seed[512:])
+		}
 	}
 	f.Add(false, false, []byte("MZ"))
 	f.Add(true, false, buildMinimalPE(1))
@@ -58,10 +63,25 @@ func FuzzExports(f *testing.F) {
 			}
 			strings += len(s) + 1
 		}
-		if exports.DLL != "" {
-			checkString(exports.DLL)
-		}
 		dir := file.OptionalHeader.DataDirectories[0]
+		offset, ok := file.RVAToOffset(dir.VirtualAddress)
+		reader := NewSafeReader(data)
+		nameRVA, err := reader.ReadUint32(int64(offset) + 12)
+		if !ok || err != nil || exports.DLLNameRVA != nameRVA {
+			t.Fatal("DLL name RVA differs from the directory")
+		}
+		if exports.DLLNameRVA == 0 {
+			if exports.DLL != "" {
+				t.Fatal("absent DLL name has a value")
+			}
+		} else {
+			checkString(exports.DLL) // Include the terminator of a present empty name.
+			offset, ok := file.RVAToOffset(exports.DLLNameRVA)
+			name, err := reader.ReadASCIIZ(int64(offset), MaxExportNameBytes)
+			if !ok || err != nil || name != exports.DLL {
+				t.Fatal("DLL name does not match its RVA")
+			}
+		}
 		for i, s := range exports.Symbols {
 			if uint64(s.Ordinal) != uint64(exports.OrdinalBase)+uint64(i) {
 				t.Fatal("ordinal wrapped")

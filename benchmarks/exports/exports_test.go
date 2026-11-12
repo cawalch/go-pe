@@ -83,6 +83,9 @@ func TestCommonExportRecords(t *testing.T) {
 				if err := safe.Parse(); err != nil {
 					t.Fatal(err)
 				}
+				if safe.Export.Struct.Name != out.DLLNameRVA || safe.Export.Name != out.DLL {
+					t.Fatalf("saferwall DLL: %#x %q; want %#x %q", safe.Export.Struct.Name, safe.Export.Name, out.DLLNameRVA, out.DLL)
+				}
 				got = nil
 				for _, s := range safe.Export.Functions {
 					got = append(got, record{s.Ordinal, s.FunctionRVA, s.Name, s.Forwarder})
