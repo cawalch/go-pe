@@ -1,0 +1,40 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/cawalch/go-pe/benchmarks/exports
+cpu: Apple M3 Max
+BenchmarkParseExports/Symbols16/go-pe-14         	 1646982	       724.6 ns/op	    2136 B/op	      24 allocs/op
+BenchmarkParseExports/Symbols16/go-pe-14         	 1655182	       723.7 ns/op	    2136 B/op	      24 allocs/op
+BenchmarkParseExports/Symbols16/go-pe-14         	 1662888	       720.4 ns/op	    2136 B/op	      24 allocs/op
+BenchmarkParseExports/Symbols16/go-pe-14         	 1658101	       724.1 ns/op	    2136 B/op	      24 allocs/op
+BenchmarkParseExports/Symbols16/go-pe-14         	 1649858	       728.1 ns/op	    2136 B/op	      24 allocs/op
+BenchmarkParseExports/Symbols16/go-pe-14         	 1628836	       734.0 ns/op	    2136 B/op	      24 allocs/op
+BenchmarkParseExports/Symbols16/Binject-14       	  391927	      3096 ns/op	    4672 B/op	      45 allocs/op
+BenchmarkParseExports/Symbols16/Binject-14       	  394994	      3078 ns/op	    4672 B/op	      45 allocs/op
+BenchmarkParseExports/Symbols16/Binject-14       	  387400	      3065 ns/op	    4672 B/op	      45 allocs/op
+BenchmarkParseExports/Symbols16/Binject-14       	  398706	      3062 ns/op	    4672 B/op	      45 allocs/op
+BenchmarkParseExports/Symbols16/Binject-14       	  370814	      3058 ns/op	    4672 B/op	      45 allocs/op
+BenchmarkParseExports/Symbols16/Binject-14       	  385634	      3080 ns/op	    4672 B/op	      45 allocs/op
+BenchmarkParseExports/Symbols16/saferwall-14     	  185208	      6345 ns/op	    8510 B/op	     101 allocs/op
+BenchmarkParseExports/Symbols16/saferwall-14     	  189181	      6320 ns/op	    8510 B/op	     101 allocs/op
+BenchmarkParseExports/Symbols16/saferwall-14     	  192615	      6318 ns/op	    8510 B/op	     101 allocs/op
+BenchmarkParseExports/Symbols16/saferwall-14     	  189196	      6342 ns/op	    8510 B/op	     101 allocs/op
+BenchmarkParseExports/Symbols16/saferwall-14     	  190269	      6307 ns/op	    8510 B/op	     101 allocs/op
+BenchmarkParseExports/Symbols16/saferwall-14     	  189199	      6319 ns/op	    8510 B/op	     101 allocs/op
+BenchmarkParseExports/Symbols256/go-pe-14        	  145252	      8422 ns/op	   26904 B/op	     264 allocs/op
+BenchmarkParseExports/Symbols256/go-pe-14        	  146142	      8242 ns/op	   26904 B/op	     264 allocs/op
+BenchmarkParseExports/Symbols256/go-pe-14        	  145264	      8250 ns/op	   26904 B/op	     264 allocs/op
+BenchmarkParseExports/Symbols256/go-pe-14        	  143774	      8291 ns/op	   26904 B/op	     264 allocs/op
+BenchmarkParseExports/Symbols256/go-pe-14        	  146175	      8346 ns/op	   26904 B/op	     264 allocs/op
+BenchmarkParseExports/Symbols256/go-pe-14        	  143619	      8347 ns/op	   26904 B/op	     264 allocs/op
+BenchmarkParseExports/Symbols256/Binject-14      	   50154	     23973 ns/op	   55680 B/op	     297 allocs/op
+BenchmarkParseExports/Symbols256/Binject-14      	   50379	     23904 ns/op	   55680 B/op	     297 allocs/op
+BenchmarkParseExports/Symbols256/Binject-14      	   50706	     23583 ns/op	   55680 B/op	     297 allocs/op
+BenchmarkParseExports/Symbols256/Binject-14      	   51124	     23616 ns/op	   55680 B/op	     297 allocs/op
+BenchmarkParseExports/Symbols256/Binject-14      	   50727	     23672 ns/op	   55680 B/op	     297 allocs/op
+BenchmarkParseExports/Symbols256/Binject-14      	   51231	     23550 ns/op	   55680 B/op	     297 allocs/op
+BenchmarkParseExports/Symbols256/saferwall-14    	   17742	     67349 ns/op	  102153 B/op	     844 allocs/op
+BenchmarkParseExports/Symbols256/saferwall-14    	   17623	     67906 ns/op	  102130 B/op	     843 allocs/op
+BenchmarkParseExports/Symbols256/saferwall-14    	   17781	     67244 ns/op	  102144 B/op	     843 allocs/op
+BenchmarkParseExports/Symbols256/saferwall-14    	   17671	     68135 ns/op	  102145 B/op	     843 allocs/op
+BenchmarkParseExports/Symbols256/saferwall-14    	   17718	     67725 ns/op	  102132 B/op	     843 allocs/op
+BenchmarkParseExports/Symbols256/saferwall-14    	   17739	     67683 ns/op	  102135 B/op	     843 allocs/op

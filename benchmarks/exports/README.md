@@ -58,3 +58,6 @@ go test -run '^$' -bench '^BenchmarkExports$' -benchmem -benchtime=500ms -count=
 Keep concurrent fuzzing and other timed workloads out of benchmark runs. Record
 the CPU, Go version, source revision, sample duration, and raw results. Use
 `benchstat` to compare samples; don't interpret a single run as a regression.
+
+The [recorded samples](results/README.md) include the source revisions, measured
+medians, and the baseline check for the shared RVA-bounds helper.

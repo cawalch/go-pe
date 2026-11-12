@@ -1,0 +1,40 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/cawalch/go-pe
+cpu: Apple M3 Max
+BenchmarkExports/PE64=false/Symbols16-14         	  929187	       586.5 ns/op	    1680 B/op	      21 allocs/op
+BenchmarkExports/PE64=false/Symbols16-14         	 1000000	       585.8 ns/op	    1680 B/op	      21 allocs/op
+BenchmarkExports/PE64=false/Symbols16-14         	 1000000	       584.4 ns/op	    1680 B/op	      21 allocs/op
+BenchmarkExports/PE64=false/Symbols16-14         	 1000000	       589.5 ns/op	    1680 B/op	      21 allocs/op
+BenchmarkExports/PE64=false/Symbols16-14         	 1000000	       593.9 ns/op	    1680 B/op	      21 allocs/op
+BenchmarkExports/PE64=false/Symbols16-14         	 1000000	       592.7 ns/op	    1680 B/op	      21 allocs/op
+BenchmarkExports/PE64=false/Symbols256-14        	   75116	      8018 ns/op	   26448 B/op	     261 allocs/op
+BenchmarkExports/PE64=false/Symbols256-14        	   75109	      8012 ns/op	   26448 B/op	     261 allocs/op
+BenchmarkExports/PE64=false/Symbols256-14        	   74656	      8002 ns/op	   26448 B/op	     261 allocs/op
+BenchmarkExports/PE64=false/Symbols256-14        	   75136	      8020 ns/op	   26448 B/op	     261 allocs/op
+BenchmarkExports/PE64=false/Symbols256-14        	   73626	      8116 ns/op	   26448 B/op	     261 allocs/op
+BenchmarkExports/PE64=false/Symbols256-14        	   73707	      8112 ns/op	   26448 B/op	     261 allocs/op
+BenchmarkExports/PE64=true/Symbols16-14          	 1000000	       597.1 ns/op	    1680 B/op	      21 allocs/op
+BenchmarkExports/PE64=true/Symbols16-14          	 1000000	       598.1 ns/op	    1680 B/op	      21 allocs/op
+BenchmarkExports/PE64=true/Symbols16-14          	 1000000	       598.3 ns/op	    1680 B/op	      21 allocs/op
+BenchmarkExports/PE64=true/Symbols16-14          	 1000000	       593.8 ns/op	    1680 B/op	      21 allocs/op
+BenchmarkExports/PE64=true/Symbols16-14          	 1000000	       601.8 ns/op	    1680 B/op	      21 allocs/op
+BenchmarkExports/PE64=true/Symbols16-14          	 1000000	       596.9 ns/op	    1680 B/op	      21 allocs/op
+BenchmarkExports/PE64=true/Symbols256-14         	   73338	      8090 ns/op	   26448 B/op	     261 allocs/op
+BenchmarkExports/PE64=true/Symbols256-14         	   74202	      8067 ns/op	   26448 B/op	     261 allocs/op
+BenchmarkExports/PE64=true/Symbols256-14         	   74487	      8080 ns/op	   26448 B/op	     261 allocs/op
+BenchmarkExports/PE64=true/Symbols256-14         	   74365	      8108 ns/op	   26448 B/op	     261 allocs/op
+BenchmarkExports/PE64=true/Symbols256-14         	   73014	      8075 ns/op	   26448 B/op	     261 allocs/op
+BenchmarkExports/PE64=true/Symbols256-14         	   74594	      8125 ns/op	   26448 B/op	     261 allocs/op
+BenchmarkExports/OverLimit=false-14              	278519744	         2.146 ns/op	       0 B/op	       0 allocs/op
+BenchmarkExports/OverLimit=false-14              	277667170	         2.149 ns/op	       0 B/op	       0 allocs/op
+BenchmarkExports/OverLimit=false-14              	280205576	         2.142 ns/op	       0 B/op	       0 allocs/op
+BenchmarkExports/OverLimit=false-14              	280374650	         2.143 ns/op	       0 B/op	       0 allocs/op
+BenchmarkExports/OverLimit=false-14              	280013782	         2.141 ns/op	       0 B/op	       0 allocs/op
+BenchmarkExports/OverLimit=false-14              	279482924	         2.142 ns/op	       0 B/op	       0 allocs/op
+BenchmarkExports/OverLimit=true-14               	51737143	        11.55 ns/op	       0 B/op	       0 allocs/op
+BenchmarkExports/OverLimit=true-14               	52204177	        11.54 ns/op	       0 B/op	       0 allocs/op
+BenchmarkExports/OverLimit=true-14               	51851530	        11.53 ns/op	       0 B/op	       0 allocs/op
+BenchmarkExports/OverLimit=true-14               	52160682	        11.49 ns/op	       0 B/op	       0 allocs/op
+BenchmarkExports/OverLimit=true-14               	51005044	        11.52 ns/op	       0 B/op	       0 allocs/op
+BenchmarkExports/OverLimit=true-14               	52313604	        11.53 ns/op	       0 B/op	       0 allocs/op
