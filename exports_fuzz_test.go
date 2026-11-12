@@ -12,6 +12,8 @@ func FuzzExports(f *testing.F) {
 		data := testfixture.Exports(is64, 3)
 		f.Add(is64, false, data)
 		f.Add(is64, true, data[512:])
+		// Keep the ordinary seeds unchanged: F.Add retains their byte slices.
+		data = testfixture.Exports(is64, 3)
 		// Alias and forwarder seeds reach branches ordinary names don't exercise.
 		binary.LittleEndian.PutUint16(data[exportTableOffset(data, 36)+2:], 0)
 		binary.LittleEndian.PutUint32(data[552:], binary.LittleEndian.Uint32(data[exportTableOffset(data, 32):]))

@@ -161,7 +161,8 @@ or `File` during a call.
 `Symbols` follows export address table order and includes unused slots whose
 `RVA` is zero. Each symbol has its full ordinal, including the directory's
 ordinal base. `Names` preserves all aliases, duplicates, and empty names in name
-pointer table order within that symbol. A nil `Names` slice means ordinal-only.
+pointer table order within that symbol. A nil `Names` slice means the slot has
+no name pointers; the slot can be an ordinal-only export or an unused slot.
 Names preserve their bytes without encoding checks or case folding.
 
 `Forwarded` identifies an RVA within the export directory's declared range.

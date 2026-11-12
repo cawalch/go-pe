@@ -11,13 +11,22 @@ import (
 
 func BenchmarkExports(b *testing.B) {
 	for _, is64 := range []bool{false, true} {
-		for _, count := range []int{16, 256} {
+		for _, tc := range []struct {
+			count       int
+			ordinalOnly bool
+		}{{16, false}, {256, false}, {256, true}, {MaxExportSymbols, true}} {
+			count := tc.count
 			data := testfixture.Exports(is64, count)
+			name := fmt.Sprintf("PE64=%t/Symbols%d", is64, count)
+			if tc.ordinalOnly {
+				binary.LittleEndian.PutUint32(data[536:], 0)
+				name += "/OrdinalOnly"
+			}
 			f, err := New(data)
 			if err != nil {
 				b.Fatal(err)
 			}
-			b.Run(fmt.Sprintf("PE64=%t/Symbols%d", is64, count), func(b *testing.B) {
+			b.Run(name, func(b *testing.B) {
 				b.ReportAllocs()
 				for b.Loop() {
 					out, err := f.Exports(data)

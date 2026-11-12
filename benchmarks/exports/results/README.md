@@ -54,3 +54,26 @@ revision with `go test -c -o PATH`. Run each binary with `-test.run='^$'`,
 
 Collect six alternating pairs. The parent comparison guide provides the
 commands for reproducing the export measurements.
+
+## Alias bookkeeping check
+
+`review-baseline.txt` and `review-candidate.txt` use the same environment as the
+samples above. The baseline is `69ffba6` with the ordinal-only benchmark cases
+added. The candidate's `exports.go` blob is
+`6be2cf76a9666d398fc8f1d2784a3c6b6f245025`. Six pairs alternated baseline and
+candidate binaries, reversing their order for each pair, with no concurrent
+fuzzing. Each sample ran for 1 second using this filter:
+
+```text
+^BenchmarkExports$/PE64=true$/Symbols(256|65536)$
+```
+
+Named exports retained 261 allocations and showed no significant timing change
+(7.848 µs to 7.801 µs; p = 0.310). Ordinal-only parsing dropped from four to three
+allocations: 256 slots saved 1 KiB and measured 1.508 µs to 1.385 µs (p = 0.002).
+At 65,536 slots, it saved 256 KiB with no significant timing change (p = 0.065).
+The fixtures retain their unused name table bytes but declare zero names.
+
+```sh
+benchstat review-baseline.txt review-candidate.txt
+```

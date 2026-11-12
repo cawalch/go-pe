@@ -41,7 +41,8 @@ type ExportDirectory struct {
 // ExportSymbol describes one export address table slot. Ordinal includes the
 // directory's ordinal base. RVA is the unmodified table value; ordinary targets
 // need not map to file bytes (for example, exported data in virtual zero-fill).
-// A nil Names slice means ordinal-only; an empty string in Names is a named entry.
+// A nil Names slice means the slot has no name pointers; an empty string in
+// Names is a named entry.
 // When Forwarded is true, Forwarder contains the raw string at RVA, which can be
 // empty. The parser doesn't validate its syntax or resolve another DLL.
 type ExportSymbol struct {
@@ -109,7 +110,10 @@ func (f *File) Exports(data []byte) (*ExportDirectory, error) {
 		return nil, err
 	}
 	// Count aliases before allocating the output. Each index must address a slot.
-	counts := make([]uint32, functions)
+	var counts []uint32
+	if names != 0 {
+		counts = make([]uint32, functions)
+	}
 	for i := uint32(0); i < names; i++ {
 		index := binary.LittleEndian.Uint16(ordinals[i*2:])
 		if uint32(index) >= functions {
@@ -137,9 +141,9 @@ func (f *File) Exports(data []byte) (*ExportDirectory, error) {
 		symbol := &result.Symbols[i]
 		symbol.Ordinal = base + uint32(i)
 		symbol.RVA = binary.LittleEndian.Uint32(addresses[i*4:])
-		if n := counts[i]; n != 0 {
-			symbol.Names, pool = pool[:n:n], pool[n:]
-			counts[i] = 0
+		if names != 0 && counts[i] != 0 {
+			n := counts[i]
+			symbol.Names, pool = pool[:0:n], pool[n:]
 		}
 		if uint64(symbol.RVA) >= uint64(dir.VirtualAddress) && uint64(symbol.RVA) < end {
 			symbol.Forwarded = true
@@ -155,8 +159,8 @@ func (f *File) Exports(data []byte) (*ExportDirectory, error) {
 		if err != nil {
 			return nil, err
 		}
-		result.Symbols[index].Names[counts[index]] = name
-		counts[index]++
+		symbol := &result.Symbols[index]
+		symbol.Names = append(symbol.Names, name)
 	}
 	return result, nil
 }

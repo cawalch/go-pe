@@ -85,6 +85,14 @@ func TestExportsNameAndForwarderPolicy(t *testing.T) {
 			!got.Symbols[1].Forwarded || got.Symbols[1].Forwarder != "" {
 			t.Fatalf("raw metadata: %+v", got)
 		}
+		// An ordinal-only directory ignores both unused name table pointers.
+		binary.LittleEndian.PutUint32(data[536:], 0)
+		binary.LittleEndian.PutUint32(data[544:], 0xffffffff)
+		binary.LittleEndian.PutUint32(data[548:], 0xffffffff)
+		got, err = parseTestExports(t, data)
+		if err != nil || len(got.Symbols) != 2 || got.Symbols[0].Names != nil || got.Symbols[1].Names != nil {
+			t.Fatalf("ordinal-only directory: %+v %v", got, err)
+		}
 		// Empty tables don't dereference their unused pointers.
 		clear(data[532:540])
 		binary.LittleEndian.PutUint32(data[540:], 0xffffffff)
@@ -149,6 +157,24 @@ func TestExportsCrossSectionTable(t *testing.T) {
 		got, err := parseTestExports(t, data)
 		if err != nil || !reflect.DeepEqual(got, want) {
 			t.Fatalf("cross-section tables: %+v, %v; want %+v", got, err, want)
+		}
+	}
+}
+
+func TestExportsInterleavedAliases(t *testing.T) {
+	data := testfixture.Exports(true, 4)
+	ordinals := exportTableOffset(data, 36)
+	for i, index := range []uint16{2, 0, 2, 0} {
+		binary.LittleEndian.PutUint16(data[ordinals+i*2:], index)
+	}
+	got, err := parseTestExports(t, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := [][]string{{"Function00001", "Function00003"}, nil, {"Function00000", "Function00002"}, nil}
+	for i, symbol := range got.Symbols {
+		if !reflect.DeepEqual(symbol.Names, want[i]) || cap(symbol.Names) != len(symbol.Names) {
+			t.Fatalf("slot %d names = %#v (capacity %d); want %#v", i, symbol.Names, cap(symbol.Names), want[i])
 		}
 	}
 }
