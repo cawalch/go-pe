@@ -120,3 +120,35 @@ func TestExportsConcurrentAndRepeated(t *testing.T) {
 		})
 	}
 }
+
+func TestExportsCrossSectionTable(t *testing.T) {
+	for _, is64 := range []bool{false, true} {
+		data := testfixture.Exports(is64, 2)
+		want, err := parseTestExports(t, data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Move the address table and one name to a second raw section. The DLL
+		// name lives in headers; all remain outside the export directory range.
+		secondRaw := len(data)
+		data = append(data, make([]byte, 512)...)
+		binary.LittleEndian.PutUint16(data[0x86:], 2)
+		section := exportSectionOffset(is64) + 40
+		copy(data[section:], ".other\x00\x00")
+		binary.LittleEndian.PutUint32(data[section+8:], 512)
+		binary.LittleEndian.PutUint32(data[section+12:], 0x20000000)
+		binary.LittleEndian.PutUint32(data[section+16:], 512)
+		binary.LittleEndian.PutUint32(data[section+20:], uint32(secondRaw))
+		copy(data[secondRaw:], data[552:560])
+		binary.LittleEndian.PutUint32(data[540:], 0x20000000)
+		copy(data[secondRaw+16:], "Function00001\x00")
+		pointers := exportTableOffset(data, 32)
+		binary.LittleEndian.PutUint32(data[pointers+4:], 0x20000010)
+		copy(data[0x1f0:], "example.dll\x00")
+		binary.LittleEndian.PutUint32(data[524:], 0x1f0)
+		got, err := parseTestExports(t, data)
+		if err != nil || !reflect.DeepEqual(got, want) {
+			t.Fatalf("cross-section tables: %+v, %v; want %+v", got, err, want)
+		}
+	}
+}
