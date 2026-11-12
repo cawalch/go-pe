@@ -29,7 +29,10 @@ var (
 // Symbols includes unused slots (RVA zero). Names preserve spelling, duplicates,
 // and name pointer table order within each symbol. No names are synthesized.
 type ExportDirectory struct {
-	DLL             string
+	DLL string
+	// DLLNameRVA is the unmodified export directory Name RVA. Zero means no
+	// DLL name is present. A nonzero RVA can point to an empty DLL string.
+	DLLNameRVA      uint32
 	Characteristics uint32
 	TimeDateStamp   uint32
 	MajorVersion    uint16
@@ -122,14 +125,15 @@ func (f *File) Exports(data []byte) (*ExportDirectory, error) {
 		counts[index]++
 	}
 	result := &ExportDirectory{
+		DLLNameRVA:      binary.LittleEndian.Uint32(header[12:]),
 		Characteristics: binary.LittleEndian.Uint32(header),
 		TimeDateStamp:   binary.LittleEndian.Uint32(header[4:]),
 		MajorVersion:    binary.LittleEndian.Uint16(header[8:]),
 		MinorVersion:    binary.LittleEndian.Uint16(header[10:]),
 		OrdinalBase:     base,
 	}
-	if rva := binary.LittleEndian.Uint32(header[12:]); rva != 0 {
-		result.DLL, err = p.name(rva, 1<<32)
+	if result.DLLNameRVA != 0 {
+		result.DLL, err = p.name(result.DLLNameRVA, 1<<32)
 		if err != nil {
 			return nil, err
 		}

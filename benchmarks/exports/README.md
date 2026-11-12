@@ -13,7 +13,13 @@ The source review on November 12, 2026 covered the following implementations:
 | [saferwall/pe v1.6.5](https://github.com/saferwall/pe/blob/v1.6.5/exports.go) | Reads names, ordinals, and forwarders into mutable `File.Export` state. It filters symbol names, skips zero-RVA slots, and records anomalies. Its options can omit unrelated directories. Dependencies include PKCS#7, memory mapping, and text support. The repository has an MIT license; the export source carries an Apache 2.0 notice. |
 | [Binject/debug at `4e22595eaac6`](https://github.com/Binject/debug/blob/4e22595eaac6ef91e0f45a2a1ef6e765d75a88a7/pe/exports.go) | Offers `Exports()` on a reader-backed file under a BSD-style license. Its export path reads from the directory's section and maps one name per ordinal. Its forwarder classification uses the section range. |
 
-The new implementation follows the
+The DLL-name RVA addition also follows the existing APIs: saferwall retains
+this value in `Export.Struct.Name`, and Binject names its raw directory field
+`NameRVA`. go-pe exposes `DLLNameRVA` alongside its existing `DLL` string. This
+preserves missing-versus-empty name information without another parsing pass or
+a runtime dependency.
+
+The implementation follows the
 [Microsoft PE format](https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#export-directory-table)
 and reuses go-pe's existing RVA bounds logic. It doesn't copy code from these
 parsers or wrap their error recovery. This preserves go-pe's owned snapshots,
@@ -26,6 +32,7 @@ new runtime dependency. The root package's tests cover those policies separately
 forwarder strings on generated PE32 and PE32+ metadata. Cases include named,
 ordinal-only, and forwarded exports. The shared fixtures have valid metadata
 tables and target RVAs outside the file; these parsers don't read target code.
+The saferwall comparison also checks the DLL name and its raw RVA.
 
 The common cases exclude holes, duplicate aliases, unsorted or unusual names,
 cross-section tables, and malformed metadata. Those behaviors differ between
