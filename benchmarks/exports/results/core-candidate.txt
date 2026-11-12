@@ -1,0 +1,22 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/cawalch/go-pe
+cpu: Apple M3 Max
+BenchmarkNew/Sections8-14         	 4654288	       249.6 ns/op	     874 B/op	      10 allocs/op
+BenchmarkNew/NonPE-14             	225534692	         5.316 ns/op	       0 B/op	       0 allocs/op
+BenchmarkImports/PE64=true/Symbols256-14         	  207360	      5751 ns/op	   19872 B/op	     267 allocs/op
+BenchmarkNew/Sections8-14         	 4921465	       241.5 ns/op	     874 B/op	      10 allocs/op
+BenchmarkNew/NonPE-14             	230938844	         5.202 ns/op	       0 B/op	       0 allocs/op
+BenchmarkImports/PE64=true/Symbols256-14         	  205431	      5804 ns/op	   19872 B/op	     267 allocs/op
+BenchmarkNew/Sections8-14         	 4901290	       243.4 ns/op	     874 B/op	      10 allocs/op
+BenchmarkNew/NonPE-14             	229142064	         5.245 ns/op	       0 B/op	       0 allocs/op
+BenchmarkImports/PE64=true/Symbols256-14         	  202998	      5870 ns/op	   19872 B/op	     267 allocs/op
+BenchmarkNew/Sections8-14         	 4891338	       244.3 ns/op	     874 B/op	      10 allocs/op
+BenchmarkNew/NonPE-14             	228611108	         5.252 ns/op	       0 B/op	       0 allocs/op
+BenchmarkImports/PE64=true/Symbols256-14         	  201919	      5836 ns/op	   19872 B/op	     267 allocs/op
+BenchmarkNew/Sections8-14         	 4848979	       245.8 ns/op	     874 B/op	      10 allocs/op
+BenchmarkNew/NonPE-14             	228804590	         5.241 ns/op	       0 B/op	       0 allocs/op
+BenchmarkImports/PE64=true/Symbols256-14         	  198856	      5848 ns/op	   19872 B/op	     267 allocs/op
+BenchmarkNew/Sections8-14         	 4877712	       244.4 ns/op	     874 B/op	      10 allocs/op
+BenchmarkNew/NonPE-14             	226110555	         5.304 ns/op	       0 B/op	       0 allocs/op
+BenchmarkImports/PE64=true/Symbols256-14         	  203607	      5826 ns/op	   19872 B/op	     267 allocs/op

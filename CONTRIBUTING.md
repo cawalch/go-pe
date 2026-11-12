@@ -48,6 +48,7 @@ For parser or reader changes, run the applicable fuzz target:
 go test -run '^$' -fuzz '^FuzzNew$' -fuzztime=30s -parallel=2
 go test -run '^$' -fuzz '^FuzzSafeReader$' -fuzztime=30s -parallel=2
 go test -run '^$' -fuzz '^FuzzImports$' -fuzztime=30s -parallel=2
+go test -run '^$' -fuzz '^FuzzExports$' -fuzztime=30s -parallel=2
 ```
 
 The tests compare PE32 and PE32+ headers, sections, and ordinary named imports
@@ -55,7 +56,11 @@ with `debug/pe`. The import comparison uses synthetic files and PE fixtures in
 the Go toolchain. Separate tests cover ordinal imports, lookup-table fallback,
 section bounds, resource limits, and malformed import records. The tests
 also cover truncation, directory bounds, COFF strings, arithmetic overflow,
-address mapping, and concurrent reads. These comparisons and bounded fuzz runs
+address mapping, and concurrent reads. Export tests cover aliases, ordinal-only entries, unused slots, forwarders,
+header and section mapping, truncation, arithmetic overflow, and resource limits.
+The optional module in `benchmarks/exports` compares ordinary export records
+with pinned versions of saferwall/pe and Binject/debug.
+These comparisons and bounded fuzz runs
 don't establish full format compatibility or prove that all inputs are safe.
 
 ## Measure performance
@@ -73,3 +78,9 @@ directory, and rejection at the total symbol limit. Separate `debug/pe`
 comparisons measure header parsing and headers with named imports. The libraries
 return different representations and perform different checks, so these results
 don't establish overall performance superiority.
+
+Export benchmarks measure repeated parsing from an existing header snapshot,
+absent directories, and rejection at the address-slot limit. For comparisons
+that include headers and exports, follow the commands in
+[Export parser comparisons](benchmarks/exports/README.md). That separate module
+has third-party dependencies; it doesn't add dependencies to the parser module.

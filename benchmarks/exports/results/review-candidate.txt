@@ -1,0 +1,22 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/cawalch/go-pe
+cpu: Apple M3 Max
+BenchmarkExports/PE64=true/Symbols256-14         	  130200	      7936 ns/op	   26448 B/op	     261 allocs/op
+BenchmarkExports/PE64=true/Symbols256/OrdinalOnly-14         	  820052	      1391 ns/op	   16464 B/op	       3 allocs/op
+BenchmarkExports/PE64=true/Symbols65536/OrdinalOnly-14       	    8146	    146495 ns/op	 3670098 B/op	       3 allocs/op
+BenchmarkExports/PE64=true/Symbols256-14         	  151442	      7788 ns/op	   26448 B/op	     261 allocs/op
+BenchmarkExports/PE64=true/Symbols256/OrdinalOnly-14         	  903820	      1379 ns/op	   16464 B/op	       3 allocs/op
+BenchmarkExports/PE64=true/Symbols65536/OrdinalOnly-14       	    7965	    150225 ns/op	 3670099 B/op	       3 allocs/op
+BenchmarkExports/PE64=true/Symbols256-14         	  153717	      7754 ns/op	   26448 B/op	     261 allocs/op
+BenchmarkExports/PE64=true/Symbols256/OrdinalOnly-14         	  872512	      1421 ns/op	   16464 B/op	       3 allocs/op
+BenchmarkExports/PE64=true/Symbols65536/OrdinalOnly-14       	    8026	    153306 ns/op	 3670099 B/op	       3 allocs/op
+BenchmarkExports/PE64=true/Symbols256-14         	  151755	      7703 ns/op	   26448 B/op	     261 allocs/op
+BenchmarkExports/PE64=true/Symbols256/OrdinalOnly-14         	  920768	      1355 ns/op	   16464 B/op	       3 allocs/op
+BenchmarkExports/PE64=true/Symbols65536/OrdinalOnly-14       	    8272	    153355 ns/op	 3670099 B/op	       3 allocs/op
+BenchmarkExports/PE64=true/Symbols256-14         	  152982	      7813 ns/op	   26448 B/op	     261 allocs/op
+BenchmarkExports/PE64=true/Symbols256/OrdinalOnly-14         	  852650	      1421 ns/op	   16464 B/op	       3 allocs/op
+BenchmarkExports/PE64=true/Symbols65536/OrdinalOnly-14       	    7263	    161753 ns/op	 3670098 B/op	       3 allocs/op
+BenchmarkExports/PE64=true/Symbols256-14         	  149017	      7851 ns/op	   26448 B/op	     261 allocs/op
+BenchmarkExports/PE64=true/Symbols256/OrdinalOnly-14         	  883768	      1376 ns/op	   16464 B/op	       3 allocs/op
+BenchmarkExports/PE64=true/Symbols65536/OrdinalOnly-14       	    7786	    148612 ns/op	 3670098 B/op	       3 allocs/op
