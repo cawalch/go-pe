@@ -1,7 +1,7 @@
 # go-pe
 
 go-pe is a Go library for reading Portable Executable (PE) image headers,
-sections, and standard imports. It supports PE32 and PE32+ images, uses only the
+sections, standard imports, and exports. It supports PE32 and PE32+ images, uses only the
 Go standard library, and requires Go 1.26 or later.
 
 The library is in early development. No stable release is available.
@@ -14,12 +14,13 @@ You can use go-pe to read:
 - PE32 and PE32+ optional headers and the first 16 data directory descriptors.
 - Section headers and names, including names stored in a COFF string table.
 - Standard import descriptors, DLL names, and imports by name and hint or ordinal.
+- Export directories, address slots, ordinal values, name aliases, and raw forwarders.
 
 The library also provides section lookup, dynamic-link library (DLL) and format
 checks, and conversion between relative virtual addresses (RVAs) and file
 offsets. The `SafeReader` utility provides bounds-checked integer and string reads.
 
-go-pe doesn't parse delayed imports, exports, Authenticode signatures, Rich
+go-pe doesn't parse delayed imports, Authenticode signatures, Rich
 headers, resources, or version information. It doesn't resolve bound import
 addresses or calculate imphash values. It doesn't support standalone COFF
 objects, ROM images, loaded-memory images, memory-mapped input, or `io.ReaderAt`.
@@ -98,7 +99,7 @@ go run . sample.exe
 ```
 
 For headers and sections alone, you can use `Open(path)`. It reads the entire file
-into memory and calls `New`. Neither function parses imports. If you need to
+into memory and calls `New`. Neither function parses imports or exports. If you need to
 control input size or I/O, acquire the bytes in your application and pass them to
 `New(data)`.
 
@@ -106,7 +107,7 @@ control input size or I/O, acquire the bytes in your application and pass them t
 
 `New` copies header values and section names without retaining the input buffer.
 You can reuse or release the buffer after `New` returns unless you plan to pass
-it to `Imports`. The returned `File` doesn't require a `Close` call.
+it to `Imports` or `Exports`. The returned `File` doesn't require a `Close` call.
 
 If you don't modify its exported fields, you can read a `File` from multiple
 goroutines. `SectionByName` returns a pointer into `File.Sections`, so changes through
@@ -149,6 +150,48 @@ These limits bound parsing work and output. They aren't Windows loader limits.
 Use `errors.Is` with `ErrInvalidImport`, `ErrImportLimit`, or the bounds and
 string errors listed below to classify failures. An overlong name returns
 `ErrUnterminatedString` when no NUL byte occurs within `MaxImportNameBytes`.
+
+### Read standard exports
+
+Call `file.Exports(data)` with the original bytes passed to `New`. The method
+returns an owned `ExportDirectory` or `nil, nil` for a missing directory. It
+doesn't retain the input, modify `File`, or cache results. Don't modify the input
+or `File` during a call.
+
+`Symbols` follows export address table order and includes unused slots whose
+`RVA` is zero. Each symbol has its full ordinal, including the directory's
+ordinal base. `Names` preserves all aliases, duplicates, and empty names in name
+pointer table order within that symbol. A nil `Names` slice means ordinal-only.
+Names preserve their bytes without encoding checks or case folding.
+
+`Forwarded` identifies an RVA within the export directory's declared range.
+`Forwarder` contains the raw NUL-terminated string, which can be empty. The
+parser doesn't validate its syntax or resolve other DLLs. Ordinary target RVAs
+are returned without dereferencing them; they can refer to virtual zero-fill or
+unmapped data. A missing DLL-name RVA yields an empty `DLL` string.
+
+Tables and strings must fit within their selected raw section or header range,
+the original file size, and the supplied bytes. Forwarder strings must also
+terminate within the export directory's RVA range. The other tables and names
+can be outside that range, including in another section. Unused table pointers
+aren't read when their count is zero. The parser checks ordinal indexes, RVA
+extent arithmetic, and ordinal-base addition before using them.
+
+Each call permits at most 65,536 address slots (`MaxExportSymbols`), 65,536 name
+pointers (`MaxExportNames`), 4,096 bytes per string including its NUL
+(`MaxExportNameBytes`), and 1 MiB of total string bytes
+(`MaxExportStringBytes`). Repeated references consume the string budget on each
+read. These are work and output limits, not Windows loader limits. Parsing is
+synchronous and doesn't accept a cancellation callback.
+
+Failures return no partial directory. Use `errors.Is` with `ErrInvalidExport`,
+`ErrExportLimit`, or the bounds, overflow, section-limit, and string errors below.
+An overlong string returns `ErrUnterminatedString`; exhaustion of the total
+string budget returns `ErrExportLimit`. The parser doesn't enforce name sorting
+or establish that Windows can load the image.
+
+See [Export parser comparisons](benchmarks/exports/README.md) for the existing
+implementations assessed, the comparison scope, and benchmark commands.
 
 ### Handle malformed input
 
