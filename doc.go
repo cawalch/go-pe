@@ -1,4 +1,5 @@
-// Package pe reads Portable Executable (PE) image headers, sections, imports, and exports.
+// Package pe reads Portable Executable (PE) image headers, sections, imports,
+// exports, and attribute certificate records.
 // It supports the PE32 and PE32+ formats and uses only the Go standard library.
 //
 // Use [New] to parse a byte slice or [Open] to read a file. Both functions return
@@ -7,7 +8,10 @@
 // To read standard imports, pass the original bytes to [File.Imports]. It returns
 // owned records and bounds parsing work with descriptor, symbol, and name limits.
 // Use [File.Exports] to read export metadata, address slots, aliases, and forwarders
-// under separate table and string limits. Neither method caches results.
+// under separate table and string limits. Use [File.Certificates] and
+// [File.CertificatePayload] to enumerate bounded WIN_CERTIFICATE records and copy
+// raw certificate payloads without verifying Authenticode signatures. None of these
+// methods cache results.
 //
 // [File.RVAToOffset] and [File.OffsetToRVA] convert between relative virtual
 // addresses and offsets within the original input. These methods don't emulate
