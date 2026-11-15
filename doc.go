@@ -15,8 +15,11 @@
 // certificate, attribute, nested-signature, and timestamp metadata without
 // verifying signatures or trust chains. Use [File.AuthenticodeDigest],
 // [File.AuthenticodeDigests], and [File.AuthenticodeDigestRanges] to inspect
-// excluded ranges and compute checked Authenticode PE image digests. None of
-// these methods cache results.
+// excluded ranges and compute checked Authenticode PE image digests. Use
+// [File.VerifyAuthenticode] and [File.VerifyAuthenticodeSignatures] to check
+// image-digest agreement, CMS signed attributes and signatures, PKCS#9/RFC 3161
+// timestamps, and optional explicit trust roots offline without ambient OS
+// trust or network lookups. None of these methods cache results.
 //
 // [File.RVAToOffset] and [File.OffsetToRVA] convert between relative virtual
 // addresses and offsets within the original input. These methods don't emulate

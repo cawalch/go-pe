@@ -34,6 +34,7 @@ jobs:
           go test -run '^$' -fuzz '^FuzzCertificates$' -fuzztime=15s -parallel=2
           go test -run '^$' -fuzz '^FuzzAuthenticode$' -fuzztime=15s -parallel=2
           go test -run '^$' -fuzz '^FuzzAuthenticodeDigest$' -fuzztime=15s -parallel=2
+          go test -run '^$' -fuzz '^FuzzAuthenticodeVerify$' -fuzztime=15s -parallel=2
   export-comparison:
     runs-on: ubuntu-latest
     timeout-minutes: 10
