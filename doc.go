@@ -25,6 +25,9 @@
 // size bounds. Use [ParseVersionInfo] to decode VS_VERSION_INFO fixed file
 // information, ordered StringFileInfo tables, VarFileInfo translations, and
 // unrecognized child blocks from a resource payload without flattening keys.
+// Use [File.RichHeader] to locate and decode Rich headers between the DOS
+// header and PE signature with explicit XOR keys, raw/clear byte spans,
+// (@comp.id, count) entries, and checksum status.
 //
 // [File.RVAToOffset] and [File.OffsetToRVA] convert between relative virtual
 // addresses and offsets within the original input. These methods don't emulate

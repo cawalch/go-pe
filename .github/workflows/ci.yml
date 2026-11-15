@@ -33,6 +33,7 @@ jobs:
           go test -run '^$' -fuzz '^FuzzExports$' -fuzztime=15s -parallel=2
           go test -run '^$' -fuzz '^FuzzCertificates$' -fuzztime=15s -parallel=2
           go test -run '^$' -fuzz '^FuzzResources$' -fuzztime=15s -parallel=2
+          go test -run '^$' -fuzz '^FuzzRichHeader$' -fuzztime=15s -parallel=2
           go test -run '^$' -fuzz '^FuzzVersionInfo$' -fuzztime=15s -parallel=2
           go test -run '^$' -fuzz '^FuzzAuthenticode$' -fuzztime=15s -parallel=2
           go test -run '^$' -fuzz '^FuzzAuthenticodeDigest$' -fuzztime=15s -parallel=2
