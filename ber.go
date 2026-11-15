@@ -1,0 +1,222 @@
+package pe
+
+import "fmt"
+
+// ASN.1 / BER parser bounds enforced during Authenticode decoding.
+const (
+	// MaxASN1Depth limits constructed BER/DER nesting depth.
+	MaxASN1Depth = 256
+	// MaxASN1Elements limits the total number of ASN.1 TLV elements visited.
+	MaxASN1Elements = 65536
+)
+
+type berState struct {
+	elements int
+}
+
+// berToDER converts definite or indefinite-length BER input into a freshly
+// allocated canonical DER slice without retaining references to input.
+//
+// It allows trailing NUL padding after the root TLV, which some PE signers
+// append inside WIN_CERTIFICATE dwLength, and rejects non-zero trailing bytes,
+// unbounded nesting, element count floods, primitive indefinite lengths, and
+// child extents exceeding their parent container.
+func berToDER(input []byte) ([]byte, error) {
+	if len(input) == 0 {
+		return nil, fmt.Errorf("%w: empty ASN.1 input", ErrInvalidAuthenticode)
+	}
+	if len(input) > MaxCertificateBytes {
+		return nil, fmt.Errorf("%w: ASN.1 input size %d exceeds %d", ErrAuthenticodeLimit, len(input), MaxCertificateBytes)
+	}
+
+	out := make([]byte, 0, len(input))
+	var st berState
+	end, err := copyBERElement(input, 0, len(input), 1, &st, &out)
+	if err != nil {
+		return nil, err
+	}
+	for i := end; i < len(input); i++ {
+		if input[i] != 0 {
+			return nil, fmt.Errorf("%w: trailing non-zero data at offset %d", ErrInvalidAuthenticode, i)
+		}
+	}
+	return out, nil
+}
+
+func copyBERElement(src []byte, offset, parentEnd, depth int, st *berState, dst *[]byte) (int, error) {
+	if depth > MaxASN1Depth {
+		return 0, fmt.Errorf("%w: ASN.1 nesting depth exceeds %d", ErrAuthenticodeLimit, MaxASN1Depth)
+	}
+	st.elements++
+	if st.elements > MaxASN1Elements {
+		return 0, fmt.Errorf("%w: ASN.1 element count exceeds %d", ErrAuthenticodeLimit, MaxASN1Elements)
+	}
+	if offset >= parentEnd {
+		return 0, fmt.Errorf("%w: unexpected end of ASN.1 data", ErrInvalidAuthenticode)
+	}
+
+	tagStart := offset
+	first := src[offset]
+	offset++
+	constructed := first&0x20 != 0
+
+	if first&0x1f == 0x1f {
+		// Multi-octet high tag number form (X.690 section 8.1.2.4).
+		const maxHighTagOctets = 5
+		count := 0
+		for {
+			if offset >= parentEnd {
+				return 0, fmt.Errorf("%w: truncated ASN.1 high-tag identifier", ErrInvalidAuthenticode)
+			}
+			count++
+			if count > maxHighTagOctets {
+				return 0, fmt.Errorf("%w: ASN.1 tag identifier too large", ErrInvalidAuthenticode)
+			}
+			b := src[offset]
+			offset++
+			if count == 1 && b == 0x80 {
+				return 0, fmt.Errorf("%w: non-minimal ASN.1 high-tag identifier", ErrInvalidAuthenticode)
+			}
+			if b&0x80 == 0 {
+				break
+			}
+		}
+	}
+	tagEnd := offset
+
+	if offset >= parentEnd {
+		return 0, fmt.Errorf("%w: truncated ASN.1 length", ErrInvalidAuthenticode)
+	}
+	lenOctet := src[offset]
+	offset++
+
+	*dst = append(*dst, src[tagStart:tagEnd]...)
+
+	if lenOctet == 0x80 {
+		if !constructed {
+			return 0, fmt.Errorf("%w: primitive ASN.1 tag cannot use indefinite length", ErrInvalidAuthenticode)
+		}
+		lenPos := len(*dst)
+		*dst = append(*dst, 0) // Placeholder for 1-byte DER length.
+		childrenStart := lenPos + 1
+
+		for {
+			if offset+2 > parentEnd {
+				return 0, fmt.Errorf("%w: unterminated indefinite-length ASN.1 container", ErrInvalidAuthenticode)
+			}
+			if src[offset] == 0 && src[offset+1] == 0 {
+				offset += 2
+				break
+			}
+			next, err := copyBERElement(src, offset, parentEnd, depth+1, st, dst)
+			if err != nil {
+				return 0, err
+			}
+			offset = next
+		}
+
+		patchDERLength(dst, lenPos, childrenStart)
+		return offset, nil
+	}
+
+	var length int
+	if lenOctet < 0x80 {
+		length = int(lenOctet)
+	} else {
+		numBytes := int(lenOctet & 0x7f)
+		if numBytes == 0 || numBytes > 4 {
+			return 0, fmt.Errorf("%w: unsupported ASN.1 length octet count %d", ErrInvalidAuthenticode, numBytes)
+		}
+		if offset+numBytes > parentEnd {
+			return 0, fmt.Errorf("%w: truncated ASN.1 long-form length", ErrInvalidAuthenticode)
+		}
+		if numBytes == 4 && src[offset] > 0x7f {
+			return 0, fmt.Errorf("%w: ASN.1 length overflows 31-bit bound", ErrInvalidAuthenticode)
+		}
+		var ulen uint64
+		for i := range numBytes {
+			ulen = (ulen << 8) | uint64(src[offset+i])
+		}
+		offset += numBytes
+		if ulen > uint64(parentEnd-offset) {
+			return 0, fmt.Errorf("%w: ASN.1 length %d exceeds container bounds %d", ErrInvalidAuthenticode, ulen, parentEnd-offset)
+		}
+		length = int(ulen)
+	}
+	if length > parentEnd-offset {
+		return 0, fmt.Errorf("%w: ASN.1 length %d exceeds container bounds %d", ErrInvalidAuthenticode, length, parentEnd-offset)
+	}
+
+	contentEnd := offset + length
+	if !constructed {
+		appendDERLength(dst, length)
+		*dst = append(*dst, src[offset:contentEnd]...)
+		return contentEnd, nil
+	}
+
+	lenPos := len(*dst)
+	*dst = append(*dst, 0) // Placeholder for 1-byte DER length.
+	childrenStart := lenPos + 1
+	cursor := offset
+	for cursor < contentEnd {
+		next, err := copyBERElement(src, cursor, contentEnd, depth+1, st, dst)
+		if err != nil {
+			return 0, err
+		}
+		cursor = next
+	}
+	patchDERLength(dst, lenPos, childrenStart)
+	return contentEnd, nil
+}
+
+func appendDERLength(dst *[]byte, n int) {
+	var enc [5]byte
+	m := encodeDERLength(&enc, n)
+	*dst = append(*dst, enc[:m]...)
+}
+
+func patchDERLength(dst *[]byte, lenPos, childrenStart int) {
+	childLen := len(*dst) - childrenStart
+	var enc [5]byte
+	m := encodeDERLength(&enc, childLen)
+	if m == 1 {
+		(*dst)[lenPos] = enc[0]
+		return
+	}
+	extra := m - 1
+	var pad [4]byte
+	*dst = append(*dst, pad[:extra]...)
+	copy((*dst)[lenPos+m:], (*dst)[childrenStart:childrenStart+childLen])
+	copy((*dst)[lenPos:], enc[:m])
+}
+
+func encodeDERLength(buf *[5]byte, n int) int {
+	if n < 0x80 {
+		buf[0] = byte(n)
+		return 1
+	}
+	switch {
+	case n <= 0xff:
+		buf[0] = 0x81
+		buf[1] = byte(n)
+		return 2
+	case n <= 0xffff:
+		buf[0] = 0x82
+		buf[1] = byte(n >> 8)
+		buf[2] = byte(n)
+		return 3
+	case n <= 0xffffff:
+		buf[0] = 0x83
+		buf[1] = byte(n >> 16)
+		buf[2] = byte(n >> 8)
+		buf[3] = byte(n)
+		return 4
+	default:
+		buf[0] = 0x84
+		buf[1] = byte(n >> 24)
+		buf[2] = byte(n >> 16)
+		buf[3] = byte(n >> 8)
+		buf[4] = byte(n)
+		return 5
+	}
+}
