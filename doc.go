@@ -13,7 +13,10 @@
 // raw certificate payloads. Use [File.AuthenticodeSignatures] and
 // [ParseAuthenticodeSignatures] to decode bounded PKCS#7 SignedData signer,
 // certificate, attribute, nested-signature, and timestamp metadata without
-// verifying digests or trust chains. None of these methods cache results.
+// verifying signatures or trust chains. Use [File.AuthenticodeDigest],
+// [File.AuthenticodeDigests], and [File.AuthenticodeDigestRanges] to inspect
+// excluded ranges and compute checked Authenticode PE image digests. None of
+// these methods cache results.
 //
 // [File.RVAToOffset] and [File.OffsetToRVA] convert between relative virtual
 // addresses and offsets within the original input. These methods don't emulate

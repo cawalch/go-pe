@@ -17,6 +17,7 @@ You can use go-pe to read:
 - Export directories, address slots, ordinal values, name aliases, and raw forwarders.
 - Security directory attribute certificate (`WIN_CERTIFICATE`) metadata records and raw payload extraction.
 - Bounded PKCS#7 / CMS Authenticode signer, certificate, attribute, nested signature, and timestamp metadata without signature verification.
+- Authenticode PE image digests and checked byte-range inspection for MD5, SHA-1, SHA-256, SHA-384, and SHA-512.
 
 The library also provides section lookup, dynamic-link library (DLL) and format
 checks, and conversion between relative virtual addresses (RVAs) and file
@@ -228,6 +229,25 @@ input buffer. On error, use `errors.Is` with `ErrInvalidCertificate`,
 `ErrCertificateLimit`, `ErrInvalidHeader`, `ErrOutOfBounds`,
 `ErrIntegerOverflow`, or `ErrSectionLimit`. Enumerating records and reading
 payloads don't verify Authenticode signatures or parse embedded PKCS#7 structures.
+
+### Calculate Authenticode image digests
+
+Use `File.AuthenticodeDigest`, `File.AuthenticodeDigests`, and
+`File.AuthenticodeDigestRanges` with the original bytes passed to `New` to
+inspect hashed byte ranges and compute Authenticode PE image digests for
+`crypto.MD5`, `crypto.SHA1`, `crypto.SHA256`, `crypto.SHA384`, and
+`crypto.SHA512`. Each call excludes `OptionalHeader.CheckSum`,
+`DataDirectory[DataDirectoryCertificate]` when present, and the
+`WIN_CERTIFICATE` security directory when present, after validating header
+bounds, non-overlapping sections in ascending `PointerToRawData` order,
+security directory placement, and `MaxAuthenticodeDigestBytes` (256 MiB).
+
+Images whose section bodies or headers overlap, overflow, or extend past EOF
+return an error rather than partially hashing truncated bytes. Non-empty
+inter-section gaps and trailing data after a security directory are included in
+the non-excluded ranges, and unaligned unsigned binaries aren't padded with
+virtual zero bytes. Pass an unsupported `crypto.Hash` to check for
+`ErrUnsupportedDigestAlgorithm`.
 
 ### Handle malformed input
 
