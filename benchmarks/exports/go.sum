@@ -1,5 +1,7 @@
 github.com/Binject/debug v0.0.0-20260128230015-4e22595eaac6 h1:ifeU3Z7zc7C/hl0q8QKGIj2frAzq8u1l8jQz290kfaM=
 github.com/Binject/debug v0.0.0-20260128230015-4e22595eaac6/go.mod h1:QzgxDLY/qdKlvnbnb65eqTedhvQPbaSP2NqIbcuKvsQ=
+github.com/Velocidex/go-pe v0.1.0 h1:61exC+Pw19MrYsqIUlTYbd9kXrC9VlzJ6LwTuR1189s=
+github.com/Velocidex/go-pe v0.1.0/go.mod h1:H1wm5g52S08RsAxDGA+aQ6tOw5tRDSNchHB6/Zuvh0c=
 github.com/ayoubfaouzi/pkcs7 v0.2.3 h1:XGCYHteXgclHnNlPdCF8aFyoUKwP9VhLQp+VX+hBZ3U=
 github.com/ayoubfaouzi/pkcs7 v0.2.3/go.mod h1:u1EPWZOeIdVRo6C0/FVjB91Nsletw+8vZeAaAmeyJvQ=
 github.com/edsrzf/mmap-go v1.1.0 h1:6EUwBLQ/Mcr1EYLE4Tn1VdW1A4ckqCQWZBw8Hr0kjpQ=

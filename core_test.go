@@ -304,3 +304,23 @@ func TestTruncatedSectionBody(t *testing.T) {
 		t.Fatal("reverse-mapped first missing body byte")
 	}
 }
+
+func TestMutabilityAndOwnershipContracts(t *testing.T) {
+	data := buildMinimalPE(2)
+	f, err := New(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// SectionByName returns a pointer into File.Sections rather than a copy.
+	sec := f.SectionByName(".text")
+	if sec == nil {
+		t.Fatal("missing .text section")
+	}
+	sec.VirtualAddress = 0x9000
+	if f.Sections[0].VirtualAddress != 0x9000 {
+		t.Fatalf("expected SectionByName pointer to alias Sections[0], got %#x", f.Sections[0].VirtualAddress)
+	}
+	if f.SectionByName(".missing") != nil {
+		t.Fatal("expected nil for missing section")
+	}
+}

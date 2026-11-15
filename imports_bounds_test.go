@@ -213,3 +213,79 @@ func TestImportsIndependentCalls(t *testing.T) {
 		t.Fatalf("partial result: %+v, %v", got, err)
 	}
 }
+
+func TestImportsTruncationAndPE32Limits(t *testing.T) {
+	for _, is64 := range []bool{false, true} {
+		data := buildImportsPE(is64, 1, 2)
+		table := importOffset(binary.LittleEndian.Uint32(data[512:]))
+		lastRVA := binary.LittleEndian.Uint32(data[table+4:])
+		if is64 {
+			lastRVA = uint32(binary.LittleEndian.Uint64(data[table+8:]))
+		}
+		needed := importOffset(lastRVA) + 2 + len("Function1") + 1
+		f, err := New(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for end := 0; end <= len(data); end++ {
+			got, err := f.Imports(data[:end])
+			if (err == nil) != (end >= needed) || err != nil && got != nil {
+				t.Fatalf("64=%t cut=%d: %+v %v", is64, end, got, err)
+			}
+		}
+		short, err := New(data[:needed-1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, err := short.Imports(data); got != nil || !errors.Is(err, ErrUnterminatedString) {
+			t.Fatalf("64=%t accepted bytes past original file: %+v %v", is64, got, err)
+		}
+	}
+
+	// Verify cumulative limits and overflow bounds on PE32 as well as PE32+.
+	for _, tc := range []struct {
+		name               string
+		libraries, symbols int
+		fail               bool
+	}{
+		{"libraries_at", MaxImportLibraries, 0, false},
+		{"libraries_over", MaxImportLibraries + 1, 0, true},
+		{"symbols_at", 1, MaxImportSymbols, false},
+		{"symbols_over", 1, MaxImportSymbols + 1, true},
+	} {
+		t.Run("PE32/"+tc.name, func(t *testing.T) {
+			got, err := parseTestImports(t, buildImportsPE(false, tc.libraries, tc.symbols))
+			if tc.fail {
+				if got != nil || !errors.Is(err, ErrImportLimit) {
+					t.Fatalf("got %d libraries, %v", len(got), err)
+				}
+			} else if err != nil || len(got) != tc.libraries {
+				t.Fatalf("got %d libraries, %v", len(got), err)
+			}
+		})
+	}
+}
+
+func TestImportsMaxSectionsAndEmptyDescriptors(t *testing.T) {
+	data := buildImportsPE(true, MaxImportLibraries, 0)
+	f, err := New(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Expand sections up to MaxSections so rvaSpan exercises the full section table.
+	base := f.Sections[0]
+	f.Sections = make([]Section, MaxSections)
+	for i := range f.Sections {
+		f.Sections[i] = base
+		if i < MaxSections-1 {
+			f.Sections[i].VirtualAddress = uint32(0x10000000 + i*0x1000)
+			f.Sections[i].VirtualSize = 0x1000
+			f.Sections[i].SizeOfRawData = 0
+			f.Sections[i].PointerToRawData = 0
+		}
+	}
+	got, err := f.Imports(data)
+	if err != nil || len(got) != MaxImportLibraries {
+		t.Fatalf("MaxSections + MaxImportLibraries = (%d, %v)", len(got), err)
+	}
+}

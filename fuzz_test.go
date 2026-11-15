@@ -1,12 +1,27 @@
 package pe
 
 import (
+	"encoding/binary"
 	"math"
 	"testing"
 )
 
 func FuzzNew(f *testing.F) {
-	for _, data := range [][]byte{nil, []byte("MZ"), buildPE32(), buildMinimalPE(0), buildMinimalPE(2), longNamePE(".long_section")} {
+	overSections := buildMinimalPE(1)
+	binary.LittleEndian.PutUint16(overSections[134:], MaxSections+1)
+	truncatedOpt := buildPE32()[:160]
+	for _, data := range [][]byte{
+		nil,
+		[]byte("MZ"),
+		make([]byte, 64),
+		buildPE32(),
+		truncatedOpt,
+		buildMinimalPE(0),
+		buildMinimalPE(2),
+		buildMinimalPE(MaxSections),
+		overSections,
+		longNamePE(".long_section"),
+	} {
 		f.Add(data, uint32(0x1000))
 	}
 	f.Fuzz(func(t *testing.T, data []byte, address uint32) {

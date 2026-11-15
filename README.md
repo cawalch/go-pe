@@ -197,8 +197,10 @@ An overlong string returns `ErrUnterminatedString`; exhaustion of the total
 string budget returns `ErrExportLimit`. The parser doesn't enforce name sorting
 or establish that Windows can load the image.
 
-See [Export parser comparisons](benchmarks/exports/README.md) for the existing
-implementations assessed, the comparison scope, and benchmark commands.
+See [Export parser comparisons](benchmarks/exports/README.md) and
+[Workload comparisons and parser audit](docs/workloads-and-audit.md) for the
+existing implementations assessed, limit and contract audits, benchmark
+commands, and consumer directory gating.
 
 ### Handle malformed input
 
