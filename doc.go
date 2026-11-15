@@ -33,6 +33,9 @@
 // Use [File.RichHeader] to locate and decode Rich headers between the DOS
 // header and PE signature with explicit XOR keys, raw/clear byte spans,
 // (@comp.id, count) entries, and checksum status.
+// Use [File.Debug] to read bounded IMAGE_DEBUG_DIRECTORY entries in file order
+// and decode CodeView RSDS/NB10 records (GUID/signature, age, and raw PDB path
+// bytes) while retaining non-CodeView entries as metadata.
 //
 // [File.RVAToOffset] and [File.OffsetToRVA] convert between relative virtual
 // addresses and offsets within the original input. These methods don't emulate
