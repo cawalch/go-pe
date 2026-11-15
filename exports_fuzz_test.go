@@ -25,6 +25,7 @@ func FuzzExports(f *testing.F) {
 		}
 	}
 	f.Add(false, false, []byte("MZ"))
+	f.Add(false, false, testfixture.Exports(false, 2)[:530])
 	f.Add(true, false, buildMinimalPE(1))
 	f.Add(true, true, []byte{})
 	f.Fuzz(func(t *testing.T, is64, payloadOnly bool, data []byte) {

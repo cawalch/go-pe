@@ -24,6 +24,8 @@ func FuzzImports(f *testing.F) {
 		f.Add(is64, false, buildImportsRVAEnd(is64, width-1))
 	}
 	f.Add(false, false, []byte("MZ"))
+	f.Add(false, false, buildImportsPE(false, 1, 1)[:531])
+	f.Add(true, false, buildImportsPE(true, MaxImportLibraries, 0))
 	f.Add(true, false, buildMinimalPE(1))
 	f.Add(true, true, []byte{})
 	f.Fuzz(func(t *testing.T, is64, payloadOnly bool, data []byte) {

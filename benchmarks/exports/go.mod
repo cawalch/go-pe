@@ -4,6 +4,7 @@ go 1.26.0
 
 require (
 	github.com/Binject/debug v0.0.0-20260128230015-4e22595eaac6
+	github.com/Velocidex/go-pe v0.1.0
 	github.com/cawalch/go-pe v0.0.0
 	github.com/saferwall/pe v1.6.5
 )
