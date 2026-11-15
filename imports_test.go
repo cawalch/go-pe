@@ -85,10 +85,21 @@ func TestImports(t *testing.T) {
 				putImportThunk(data[offset+width:], is64, flag|0xffff)
 				putImportThunk(data[offset+2*width:], is64, flag) // Ordinal zero is not a terminator.
 			}
+			slot0 := binary.LittleEndian.Uint32(data[512+16:])
+			slot1 := binary.LittleEndian.Uint32(data[512+20+16:])
+			w32 := uint32(width)
 			got, err := parseTestImports(t, data)
 			want := []ImportLibrary{
-				{DLL: "lib0.dll", Symbols: []ImportSymbol{{Name: "Function0"}, {Ordinal: 65535, ByOrdinal: true}, {ByOrdinal: true}}},
-				{DLL: "lib1.dll", Symbols: []ImportSymbol{{Name: "Function0"}, {Ordinal: 65535, ByOrdinal: true}, {ByOrdinal: true}}},
+				{DLL: "lib0.dll", Symbols: []ImportSymbol{
+					{Name: "Function0", IATSlotRVA: slot0, HasIATSlot: true},
+					{Ordinal: 65535, ByOrdinal: true, IATSlotRVA: slot0 + w32, HasIATSlot: true},
+					{ByOrdinal: true, IATSlotRVA: slot0 + 2*w32, HasIATSlot: true},
+				}},
+				{DLL: "lib1.dll", Symbols: []ImportSymbol{
+					{Name: "Function0", IATSlotRVA: slot1, HasIATSlot: true},
+					{Ordinal: 65535, ByOrdinal: true, IATSlotRVA: slot1 + w32, HasIATSlot: true},
+					{ByOrdinal: true, IATSlotRVA: slot1 + 2*w32, HasIATSlot: true},
+				}},
 			}
 			if err != nil || !reflect.DeepEqual(got, want) {
 				t.Fatalf("Imports = %+v, %v; want %+v", got, err, want)
@@ -311,5 +322,100 @@ func TestImportsEmptyAndNoDirectory(t *testing.T) {
 		if got, err := f.Imports(nil); got != nil || !errors.Is(err, ErrInvalidHeader) {
 			t.Fatal(got, err)
 		}
+	}
+}
+
+func TestImportIATSlotRVAs(t *testing.T) {
+	for _, is64 := range []bool{false, true} {
+		width, flag := uint32(4), uint64(1)<<31
+		if is64 {
+			width, flag = 8, uint64(1)<<63
+		}
+		name := fmt.Sprintf("PE64=%t", is64)
+		t.Run(name, func(t *testing.T) {
+			t.Run("ZeroFirstThunk", func(t *testing.T) {
+				data := buildImportsPE(is64, 1, 2)
+				binary.LittleEndian.PutUint32(data[512+16:], 0)
+				got, err := parseTestImports(t, data)
+				if err != nil || len(got) != 1 || len(got[0].Symbols) != 2 {
+					t.Fatalf("got (%+v, %v)", got, err)
+				}
+				for i, s := range got[0].Symbols {
+					if s.HasIATSlot || s.IATSlotRVA != 0 {
+						t.Fatalf("sym[%d] = %+v, want absent IAT slot", i, s)
+					}
+				}
+			})
+
+			t.Run("HighRVAAndOverflowBeforeNarrowing", func(t *testing.T) {
+				data := buildImportsPE(is64, 1, 3)
+				ilt := importOffset(binary.LittleEndian.Uint32(data[512:]))
+				putImportThunk(data[ilt+int(width):], is64, flag|42)
+
+				// High RVA with MSB set succeeds for all slots without signed wrap.
+				binary.LittleEndian.PutUint32(data[512+16:], 0x80001000)
+				got, err := parseTestImports(t, data)
+				if err != nil || len(got[0].Symbols) != 3 {
+					t.Fatalf("high RVA got (%+v, %v)", got, err)
+				}
+				for i, s := range got[0].Symbols {
+					want := uint32(0x80001000) + uint32(i)*width
+					if !s.HasIATSlot || s.IATSlotRVA != want {
+						t.Fatalf("sym[%d] = (%#x, %t), want (%#x, true)", i, s.IATSlotRVA, s.HasIATSlot, want)
+					}
+				}
+
+				// Slot 0 fits in uint32 while slots 1..2 overflow uint32 before narrowing.
+				nearEnd := math.MaxUint32 - width + 1
+				if nearEnd == 0 {
+					nearEnd = math.MaxUint32
+				}
+				binary.LittleEndian.PutUint32(data[512+16:], nearEnd)
+				got, err = parseTestImports(t, data)
+				if err != nil || len(got[0].Symbols) != 3 {
+					t.Fatalf("overflow RVA got (%+v, %v)", got, err)
+				}
+				if !got[0].Symbols[0].HasIATSlot || got[0].Symbols[0].IATSlotRVA != nearEnd {
+					t.Fatalf("sym[0] = %+v, want %#x", got[0].Symbols[0], nearEnd)
+				}
+				for i := 1; i < 3; i++ {
+					if got[0].Symbols[i].HasIATSlot || got[0].Symbols[i].IATSlotRVA != 0 {
+						t.Fatalf("sym[%d] = %+v, want absent on uint32 overflow", i, got[0].Symbols[i])
+					}
+				}
+			})
+
+			t.Run("MismatchedUnmappedIATNotEagerlyReadAndBound", func(t *testing.T) {
+				// Use separate unmapped FirstThunk in a bound descriptor; IAT bytes are never read.
+				data := buildImportsPE(is64, 1, 2)
+				binary.LittleEndian.PutUint32(data[512+4:], 1700000000) // Timestamp != 0 (bound)
+				binary.LittleEndian.PutUint32(data[512+16:], 0x5000000) // Unmapped IAT base
+				got, err := parseTestImports(t, data)
+				if err != nil || len(got[0].Symbols) != 2 {
+					t.Fatalf("bound separate IAT got (%+v, %v)", got, err)
+				}
+				if got[0].Symbols[0].IATSlotRVA != 0x5000000 || !got[0].Symbols[0].HasIATSlot ||
+					got[0].Symbols[1].IATSlotRVA != 0x5000000+width || !got[0].Symbols[1].HasIATSlot {
+					t.Fatalf("bound IAT slots = %+v", got[0].Symbols)
+				}
+			})
+
+			t.Run("FallbackUnboundAndDuplicateDescriptors", func(t *testing.T) {
+				data := buildImportsPE(is64, 2, 2)
+				// Descriptor 0 falls back to FirstThunk (OriginalFirstThunk == 0, Timestamp == 0).
+				binary.LittleEndian.PutUint32(data[512:], 0)
+				ft0 := binary.LittleEndian.Uint32(data[512+16:])
+				// Duplicate descriptor 1 points to the same DLL name and distinct FirstThunk.
+				copy(data[532+12:532+16], data[512+12:512+16])
+				ft1 := binary.LittleEndian.Uint32(data[532+16:])
+				got, err := parseTestImports(t, data)
+				if err != nil || len(got) != 2 || got[0].DLL != got[1].DLL {
+					t.Fatalf("duplicate got (%+v, %v)", got, err)
+				}
+				if got[0].Symbols[1].IATSlotRVA != ft0+width || got[1].Symbols[1].IATSlotRVA != ft1+width {
+					t.Fatalf("slots mismatch: %+v vs %+v", got[0].Symbols, got[1].Symbols)
+				}
+			})
+		})
 	}
 }

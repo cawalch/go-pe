@@ -9,7 +9,8 @@
 // directory contents; inspect [File.FileSize], [File.DeclaredExtent], and
 // [File.InputTruncated] to check whether the input covers all declared extents.
 // To read standard imports, pass the original bytes to [File.Imports]. It returns
-// owned records and bounds parsing work with descriptor, symbol, and name limits.
+// owned records (including derived IAT slot RVAs when valid) and bounds parsing
+// work with descriptor, symbol, and name limits.
 // Call [File.Imphash] or [Imphash] to compute the standard MD5 import hash, which
 // returns [ErrNoImports] or false rather than md5("") when no symbols exist.
 // Use [File.Exports] to read export metadata, address slots, aliases, and forwarders

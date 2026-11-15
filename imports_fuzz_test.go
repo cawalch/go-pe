@@ -69,7 +69,13 @@ func FuzzImports(f *testing.F) {
 		for _, library := range libraries {
 			checkName(library.DLL)
 			symbols += len(library.Symbols)
-			for _, symbol := range library.Symbols {
+			for i, symbol := range library.Symbols {
+				if !symbol.HasIATSlot && symbol.IATSlotRVA != 0 {
+					t.Fatal("absent IAT slot has nonzero RVA")
+				}
+				if symbol.HasIATSlot && i > 0 && library.Symbols[i-1].HasIATSlot && symbol.IATSlotRVA <= library.Symbols[i-1].IATSlotRVA {
+					t.Fatal("non-monotonic IAT slot RVA")
+				}
 				if symbol.ByOrdinal {
 					if symbol.Name != "" || symbol.Hint != 0 {
 						t.Fatal("ordinal import has name metadata")

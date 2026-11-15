@@ -37,11 +37,19 @@ type ImportLibrary struct {
 // ImportSymbol identifies an import by name and hint, or by ordinal.
 // When ByOrdinal is true, Name and Hint are empty and zero. Otherwise, Ordinal
 // is zero. ByOrdinal distinguishes ordinal zero from a named import.
+//
+// When HasIATSlot is true, IATSlotRVA holds the RVA of the symbol's import
+// address table (FirstThunk) slot, derived as FirstThunk + index*pointerWidth
+// without dereferencing resolved IAT pointer values. When FirstThunk is zero
+// or FirstThunk + index*pointerWidth overflows uint32, HasIATSlot is false and
+// IATSlotRVA is zero; valid lookup-table imports still succeed.
 type ImportSymbol struct {
-	Name      string
-	Hint      uint16
-	Ordinal   uint16
-	ByOrdinal bool
+	Name       string
+	Hint       uint16
+	Ordinal    uint16
+	ByOrdinal  bool
+	IATSlotRVA uint32
+	HasIATSlot bool
 }
 
 // Imports reads the standard import directory from data using f's headers.
@@ -116,7 +124,7 @@ func (f *File) Imports(data []byte) ([]ImportLibrary, error) {
 		if err != nil {
 			return nil, fmt.Errorf("import DLL name: %w", err)
 		}
-		symbols, err := p.symbols(lookup)
+		symbols, err := p.symbols(lookup, address)
 		if err != nil {
 			return nil, fmt.Errorf("imports from %q: %w", dll, err)
 		}
@@ -151,7 +159,7 @@ func (p *importParser) name(data []byte) (string, error) {
 	return name, nil
 }
 
-func (p *importParser) symbols(rva uint32) ([]ImportSymbol, error) {
+func (p *importParser) symbols(rva, firstThunk uint32) ([]ImportSymbol, error) {
 	table, err := p.file.rvaSpan(p.data, rva)
 	if err != nil {
 		return nil, err
@@ -176,6 +184,12 @@ func (p *importParser) symbols(rva uint32) ([]ImportSymbol, error) {
 			return nil, ErrImportLimit
 		}
 		var symbol ImportSymbol
+		if firstThunk != 0 {
+			slot := uint64(firstThunk) + uint64(len(symbols))*uint64(width)
+			if slot <= math.MaxUint32 {
+				symbol.IATSlotRVA, symbol.HasIATSlot = uint32(slot), true
+			}
+		}
 		if value&ordinalFlag != 0 {
 			if value & ^(ordinalFlag|0xffff) != 0 {
 				return nil, fmt.Errorf("%w: reserved ordinal bits", ErrInvalidImport)

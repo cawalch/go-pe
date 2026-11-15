@@ -65,7 +65,8 @@ func TestImportsSeparateMappings(t *testing.T) {
 	binary.LittleEndian.PutUint16(data[1025:], 7)
 	copy(data[1027:], "Function\xff\x00")
 	got, err := parseTestImports(t, data)
-	want := []ImportLibrary{{DLL: "Mixed.DLL", Symbols: []ImportSymbol{{Name: "Function\xff", Hint: 7}}}}
+	slot := binary.LittleEndian.Uint32(data[528:])
+	want := []ImportLibrary{{DLL: "Mixed.DLL", Symbols: []ImportSymbol{{Name: "Function\xff", Hint: 7, IATSlotRVA: slot, HasIATSlot: true}}}}
 	if err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v, %v", got, err)
 	}

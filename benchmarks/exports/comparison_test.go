@@ -142,6 +142,17 @@ func TestCrossLibraryHeadersAndImports(t *testing.T) {
 			if len(libs) != len(swImpF.Imports) {
 				t.Fatalf("import DLL counts differ: go-pe=%d saferwall=%d", len(libs), len(swImpF.Imports))
 			}
+			for i, swLib := range swImpF.Imports {
+				if len(libs[i].Symbols) != len(swLib.Functions) {
+					t.Fatalf("import[%d] symbol counts differ: go-pe=%d saferwall=%d", i, len(libs[i].Symbols), len(swLib.Functions))
+				}
+				for j, swSym := range swLib.Functions {
+					sym := libs[i].Symbols[j]
+					if !sym.HasIATSlot || sym.IATSlotRVA != swSym.ThunkRVA {
+						t.Fatalf("import[%d][%d] IATSlotRVA=%#x (has=%t), saferwall ThunkRVA=%#x", i, j, sym.IATSlotRVA, sym.HasIATSlot, swSym.ThunkRVA)
+					}
+				}
+			}
 			if gotNamed != len(vxF.Imports) {
 				t.Logf("note: Velocidex imports=%d vs named=%d", len(vxF.Imports), gotNamed)
 			}
