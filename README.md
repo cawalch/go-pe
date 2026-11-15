@@ -15,15 +15,17 @@ You can use go-pe to read:
 - Section headers and names, including names stored in a COFF string table.
 - Standard import descriptors, DLL names, and imports by name and hint or ordinal.
 - Export directories, address slots, ordinal values, name aliases, and raw forwarders.
+- Security directory attribute certificate (`WIN_CERTIFICATE`) metadata records and raw payload extraction.
 
 The library also provides section lookup, dynamic-link library (DLL) and format
 checks, and conversion between relative virtual addresses (RVAs) and file
 offsets. The `SafeReader` utility provides bounds-checked integer and string reads.
 
-go-pe doesn't parse delayed imports, Authenticode signatures, Rich
-headers, resources, or version information. It doesn't resolve bound import
-addresses or calculate imphash values. It doesn't support standalone COFF
-objects, ROM images, loaded-memory images, memory-mapped input, or `io.ReaderAt`.
+go-pe doesn't verify Authenticode signatures or decode PKCS#7 payloads, and it
+doesn't parse delayed imports, Rich headers, resources, or version information.
+It doesn't resolve bound import addresses or calculate imphash values. It doesn't
+support standalone COFF objects, ROM images, loaded-memory images, memory-mapped
+input, or `io.ReaderAt`.
 
 ## Install the library
 
@@ -201,6 +203,30 @@ See [Export parser comparisons](benchmarks/exports/README.md) and
 [Workload comparisons and parser audit](docs/workloads-and-audit.md) for the
 existing implementations assessed, limit and contract audits, benchmark
 commands, and consumer directory gating.
+
+### Read attribute certificates
+
+`File.Certificates` enumerates `WIN_CERTIFICATE` records from the security data
+directory (`DataDirectoryCertificate`, directory index 4) on demand from the
+caller's byte slice. Because the security directory stores raw file offsets
+rather than RVAs, this method doesn't convert directory addresses through the
+section table. When the directory is absent or both its offset and size are
+zero, `File.Certificates` returns `nil, nil` without allocating.
+
+Each `CertificateRecord` reports the record's file offset, `dwLength` (including
+the 8-byte header), `wRevision`, and `wCertificateType`. `File.Certificates`
+validates 8-byte table and record alignment, alignment padding through the end of
+the security directory, file bounds, overlap with PE headers or section raw
+data, and `MaxCertificateRecords` (1,024 records) and `MaxCertificateBytes`
+(4 MiB total directory bytes and individual payload bytes). It preserves entries
+with unrecognized revision or type codes and returns no partial slice on error.
+
+Use `File.CertificatePayload` with the same byte slice and a returned record to
+extract an owned copy of `bCertificate` without retaining references into the
+input buffer. On error, use `errors.Is` with `ErrInvalidCertificate`,
+`ErrCertificateLimit`, `ErrInvalidHeader`, `ErrOutOfBounds`,
+`ErrIntegerOverflow`, or `ErrSectionLimit`. Enumerating records and reading
+payloads don't verify Authenticode signatures or parse embedded PKCS#7 structures.
 
 ### Handle malformed input
 
