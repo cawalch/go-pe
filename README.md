@@ -18,6 +18,7 @@ You can use go-pe to read:
 - Resource directory metadata, leaf paths, and bounded payload extraction (`File.Resources`, `File.ResourcePayload`).
 - Rich headers (`File.RichHeader`), decoding XOR keys, raw/clear byte spans, `(@comp.id, count)` entries, and explicit checksum status.
 - Bounded `VS_VERSION_INFO` version-information decoding (`ParseVersionInfo`), preserving ordered language/code-page tables, duplicate keys, translations, and unrecognized blocks.
+- Bounded debug directory entries (`File.Debug`) and CodeView `RSDS`/`NB10` records with raw path bytes, GUID/signature, and age, while retaining unknown debug types as metadata.
 - Security directory attribute certificate (`WIN_CERTIFICATE`) metadata records and raw payload extraction.
 - Bounded PKCS#7 / CMS Authenticode signer, certificate, attribute, nested signature, and timestamp metadata without signature verification.
 - Authenticode PE image digests and checked byte-range inspection for MD5, SHA-1, SHA-256, SHA-384, and SHA-512.
@@ -27,7 +28,7 @@ checks, and conversion between relative virtual addresses (RVAs) and file
 offsets. The `SafeReader` utility provides bounds-checked integer and string reads.
 
 go-pe doesn't verify certificate trust chains, and it
-doesn't parse delayed imports or debug/CodeView directories.
+doesn't parse delayed imports or external PDB symbol files.
 It doesn't resolve bound import addresses. It doesn't
 support standalone COFF objects, ROM images, loaded-memory images, memory-mapped
 input, or `io.ReaderAt`.
@@ -306,6 +307,32 @@ Use `File.RichHeader` to locate and decode MSVC-style Rich metadata between the
   zero XOR keys, short or unaligned spans, or non-zero header padding, and
   `ErrRichHeaderLimit` when `MaxRichStubBytes`, `MaxRichHeaderBytes`, or
   `MaxRichEntries` is exceeded.
+
+### Read debug directories and CodeView records
+
+Use `File.Debug` with the original bytes passed to `New` to read bounded
+`IMAGE_DEBUG_DIRECTORY` descriptors in file table order:
+
+- Returns `(nil, nil)` when `DataDirectoryDebug` (index 6) is absent or both
+  its `VirtualAddress` and `Size` are zero.
+- Maps the 28-byte-aligned directory table through `RVAToOffset` within one
+  header or raw section range, and preserves all entry header fields and entry
+  ordering.
+- Decodes `DebugTypeCodeView` payloads for `RSDS` (`CodeViewSignatureRSDS`,
+  PDB 7.0 GUID and age) and `NB10` (`CodeViewSignatureNB10`, NB10 offset,
+  signature, and age), retaining raw NUL-terminated path bytes (`PDBPath`)
+  verbatim as an owned slice (`nil` when header-only, non-nil empty slice for
+  explicit `""`). Non-CodeView debug types and unrecognized CodeView signatures
+  retain metadata with `CodeView == nil`.
+- Enforces file-offset precedence on CodeView payloads: `PointerToRawData`
+  without `AddressOfRawData` reads directly within `[0, min(FileSize, len(data)))`
+  (supporting overlay debug data); `AddressOfRawData` without
+  `PointerToRawData` maps via `RVAToOffset`; and when both pointers are
+  non-zero, `RVAToOffset(AddressOfRawData)` must equal `PointerToRawData` and
+  stay within both file and section bounds (mismatches return `ErrInvalidDebug`).
+- Enforces `MaxDebugEntries` (256), `MaxDebugPayloadBytes` (64 KiB per CodeView
+  payload), `MaxCodeViewPathBytes` (4,096 bytes including NUL), and
+  `MaxDebugTotalBytes` (1 MiB cumulative CodeView payload bytes).
 
 ### Verify Authenticode integrity and timestamps offline
 
