@@ -10,7 +10,9 @@
 // [File.InputTruncated] to check whether the input covers all declared extents.
 // To read standard imports, pass the original bytes to [File.Imports]. It returns
 // owned records (including derived IAT slot RVAs when valid) and bounds parsing
-// work with descriptor, symbol, and name limits.
+// work with descriptor, symbol, and name limits. Use [File.DelayImports] to
+// read delayed import descriptors, DLLs, symbols, and IAT slot RVAs with the
+// same bounded decoding semantics.
 // Call [File.Imphash] or [Imphash] to compute the standard MD5 import hash, which
 // returns [ErrNoImports] or false rather than md5("") when no symbols exist.
 // Use [File.Exports] to read export metadata, address slots, aliases, and forwarders

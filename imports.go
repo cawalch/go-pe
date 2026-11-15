@@ -85,7 +85,15 @@ func (f *File) Imports(data []byte) ([]ImportLibrary, error) {
 	if len(f.Sections) > MaxSections {
 		return nil, ErrSectionLimit
 	}
-	p := importParser{file: f, data: data, stringBytes: MaxImportStringBytes}
+	p := importParser{
+		file:        f,
+		data:        data,
+		stringBytes: MaxImportStringBytes,
+		maxName:     MaxImportNameBytes,
+		maxSymbols:  MaxImportSymbols,
+		invalidErr:  ErrInvalidImport,
+		limitErr:    ErrImportLimit,
+	}
 	var libraries []ImportLibrary
 	for pos := uint64(0); pos+20 <= uint64(dir.Size); pos += 20 {
 		// The directory extent was checked before the loop, so this RVA fits.
@@ -124,7 +132,7 @@ func (f *File) Imports(data []byte) ([]ImportLibrary, error) {
 		if err != nil {
 			return nil, fmt.Errorf("import DLL name: %w", err)
 		}
-		symbols, err := p.symbols(lookup, address)
+		symbols, err := p.symbols(lookup, address, false, 0)
 		if err != nil {
 			return nil, fmt.Errorf("imports from %q: %w", dll, err)
 		}
@@ -138,28 +146,32 @@ type importParser struct {
 	data        []byte
 	symbolCount int
 	stringBytes int
+	maxName     int
+	maxSymbols  int
+	invalidErr  error
+	limitErr    error
 }
 
 func (p *importParser) name(data []byte) (string, error) {
-	limit := min(MaxImportNameBytes, p.stringBytes)
+	limit := min(p.maxName, p.stringBytes)
 	if limit == 0 {
-		return "", ErrImportLimit
+		return "", p.limitErr
 	}
 	name, err := NewSafeReader(data).ReadASCIIZ(0, int64(limit))
 	if err != nil {
-		if errors.Is(err, ErrUnterminatedString) && p.stringBytes < MaxImportNameBytes && len(data) >= p.stringBytes {
-			return "", ErrImportLimit
+		if errors.Is(err, ErrUnterminatedString) && p.stringBytes < p.maxName && len(data) >= p.stringBytes {
+			return "", p.limitErr
 		}
 		return "", err
 	}
 	if name == "" {
-		return "", fmt.Errorf("%w: empty name", ErrInvalidImport)
+		return "", fmt.Errorf("%w: empty name", p.invalidErr)
 	}
 	p.stringBytes -= len(name) + 1
 	return name, nil
 }
 
-func (p *importParser) symbols(rva, firstThunk uint32) ([]ImportSymbol, error) {
+func (p *importParser) symbols(rva, firstThunk uint32, subtractVA bool, vaBase uint64) ([]ImportSymbol, error) {
 	table, err := p.file.rvaSpan(p.data, rva)
 	if err != nil {
 		return nil, err
@@ -180,8 +192,8 @@ func (p *importParser) symbols(rva, firstThunk uint32) ([]ImportSymbol, error) {
 		if value == 0 {
 			return symbols, nil
 		}
-		if p.symbolCount == MaxImportSymbols {
-			return nil, ErrImportLimit
+		if p.symbolCount == p.maxSymbols {
+			return nil, p.limitErr
 		}
 		var symbol ImportSymbol
 		if firstThunk != 0 {
@@ -192,12 +204,18 @@ func (p *importParser) symbols(rva, firstThunk uint32) ([]ImportSymbol, error) {
 		}
 		if value&ordinalFlag != 0 {
 			if value & ^(ordinalFlag|0xffff) != 0 {
-				return nil, fmt.Errorf("%w: reserved ordinal bits", ErrInvalidImport)
+				return nil, fmt.Errorf("%w: reserved ordinal bits", p.invalidErr)
 			}
 			symbol.ByOrdinal, symbol.Ordinal = true, uint16(value)
 		} else {
+			if subtractVA {
+				if value < vaBase {
+					return nil, fmt.Errorf("%w: virtual address %#x below image base %#x", p.invalidErr, value, vaBase)
+				}
+				value -= vaBase
+			}
 			if value > math.MaxInt32 {
-				return nil, fmt.Errorf("%w: reserved name RVA bits", ErrInvalidImport)
+				return nil, fmt.Errorf("%w: reserved name RVA bits", p.invalidErr)
 			}
 			b, err := p.file.rvaSpan(p.data, uint32(value))
 			if err != nil {
@@ -215,5 +233,5 @@ func (p *importParser) symbols(rva, firstThunk uint32) ([]ImportSymbol, error) {
 		symbols = append(symbols, symbol)
 		p.symbolCount++
 	}
-	return nil, fmt.Errorf("%w: missing lookup-table terminator", ErrInvalidImport)
+	return nil, fmt.Errorf("%w: missing lookup-table terminator", p.invalidErr)
 }

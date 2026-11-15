@@ -13,7 +13,8 @@ You can use go-pe to read:
 - DOS headers and Common Object File Format (COFF) file headers within PE images.
 - PE32 and PE32+ optional headers and the first 16 data directory descriptors.
 - Section headers and names, including names stored in a COFF string table.
-- Standard import descriptors, DLL names, imports by name and hint or ordinal, and standard import hashes (`File.Imphash`, `Imphash`).
+- Standard import descriptors, DLL names, imports by name and hint or ordinal, derived IAT slot RVAs, and standard import hashes (`File.Imphash`, `Imphash`).
+- Delayed import descriptors (`File.DelayImports`), including RVA-based and legacy PE32 VA-based descriptors, DLL names, symbols, and IAT slot RVAs.
 - Export directories, address slots, ordinal values, name aliases, and raw forwarders.
 - Resource directory metadata, leaf paths, and bounded payload extraction (`File.Resources`, `File.ResourcePayload`).
 - Rich headers (`File.RichHeader`), decoding XOR keys, raw/clear byte spans, `(@comp.id, count)` entries, and explicit checksum status.
@@ -28,7 +29,7 @@ checks, and conversion between relative virtual addresses (RVAs) and file
 offsets. The `SafeReader` utility provides bounds-checked integer and string reads.
 
 go-pe doesn't verify certificate trust chains, and it
-doesn't parse delayed imports or external PDB symbol files.
+doesn't parse external PDB symbol files.
 It doesn't resolve bound import addresses. It doesn't
 support standalone COFF objects, ROM images, loaded-memory images, memory-mapped
 input, or `io.ReaderAt`.
@@ -176,6 +177,23 @@ extension stripping (`.dll`, `.ocx`, `.sys`) and frozen ordinal alias tables
 for `ws2_32.dll`, `wsock32.dll`, and `oleaut32.dll`. Images with zero imported
 symbols return `ErrNoImports` (from `File.Imphash`) or `("", false)` (from
 `Imphash`) rather than hashing the empty string to `md5("")`.
+
+### Read delayed imports
+
+Use `file.DelayImports(data)` with the original bytes passed to `New` to read
+delayed import descriptors (`DataDirectoryDelayImport`, index 13) in file
+order. It enforces the same bounds and limits (`MaxDelayImportLibraries = 1,024`,
+`MaxDelayImportSymbols = 65,536`, `MaxDelayImportNameBytes = 4,096`,
+`MaxDelayImportStringBytes = 1 MiB`) and classifies errors with
+`ErrInvalidDelayImport` and `ErrDelayImportLimit`.
+
+Descriptors with `Attributes == DelayImportAttrRVA` (`1`) use direct RVAs on
+PE32 and PE32+. Legacy descriptors with `Attributes == 0` subtract
+`OptionalHeader.ImageBase` from nonzero descriptor addresses and non-ordinal
+thunk values on PE32 images and return `ErrInvalidDelayImport` on PE32+; any
+other attribute bits also return `ErrInvalidDelayImport`. When
+`ImportNameTableRVA` is zero and `TimeDateStamp` is zero, lookup falls back to
+`ImportAddressTableRVA`.
 
 ### Read standard exports
 
