@@ -228,6 +228,10 @@ input buffer. On error, use `errors.Is` with `ErrInvalidCertificate`,
 `ErrIntegerOverflow`, or `ErrSectionLimit`. Enumerating records and reading
 payloads don't verify Authenticode signatures or parse embedded PKCS#7 structures.
 
+See [Authenticode reuse and dependency boundary decision](docs/authenticode-dependency-boundary.md)
+for the dependency evaluation covering `go-pe#13` and follow-on Authenticode
+metadata and verification boundaries.
+
 ### Handle malformed input
 
 `New` returns either a complete header snapshot or an error. It requires complete
