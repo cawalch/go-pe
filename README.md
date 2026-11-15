@@ -15,6 +15,8 @@ You can use go-pe to read:
 - Section headers and names, including names stored in a COFF string table.
 - Standard import descriptors, DLL names, and imports by name and hint or ordinal.
 - Export directories, address slots, ordinal values, name aliases, and raw forwarders.
+- Resource directory metadata, leaf paths, and bounded payload extraction (`File.Resources`, `File.ResourcePayload`).
+- Bounded `VS_VERSION_INFO` version-information decoding (`ParseVersionInfo`), preserving ordered language/code-page tables, duplicate keys, translations, and unrecognized blocks.
 - Security directory attribute certificate (`WIN_CERTIFICATE`) metadata records and raw payload extraction.
 - Bounded PKCS#7 / CMS Authenticode signer, certificate, attribute, nested signature, and timestamp metadata without signature verification.
 - Authenticode PE image digests and checked byte-range inspection for MD5, SHA-1, SHA-256, SHA-384, and SHA-512.
@@ -23,8 +25,8 @@ The library also provides section lookup, dynamic-link library (DLL) and format
 checks, and conversion between relative virtual addresses (RVAs) and file
 offsets. The `SafeReader` utility provides bounds-checked integer and string reads.
 
-go-pe doesn't verify Authenticode signatures or certificate trust chains, and it
-doesn't parse delayed imports, Rich headers, resources, or version information.
+go-pe doesn't verify certificate trust chains, and it
+doesn't parse delayed imports, Rich headers, or debug/CodeView directories.
 It doesn't resolve bound import addresses or calculate imphash values. It doesn't
 support standalone COFF objects, ROM images, loaded-memory images, memory-mapped
 input, or `io.ReaderAt`.
@@ -248,6 +250,30 @@ inter-section gaps and trailing data after a security directory are included in
 the non-excluded ranges, and unaligned unsigned binaries aren't padded with
 virtual zero bytes. Pass an unsupported `crypto.Hash` to check for
 `ErrUnsupportedDigestAlgorithm`.
+
+### Parse version-information resources
+
+Use `ParseVersionInfo` with a single `RT_VERSION` payload (for example from
+`File.ResourcePayload`) to decode a Windows `VS_VERSION_INFO` tree into owned
+Go records in file order:
+
+- `HasFixedInfo` and `FixedInfo`: exposes `VS_FIXEDFILEINFO` when present
+  (`Signature == VersionFixedInfoSignature`).
+- `StringTables`: preserves every `StringFileInfo` child `StringTable` and all
+  ordered `VersionString` key-value entries, including duplicate keys, empty
+  values, and non-ASCII UTF-16 names.
+- `Vars` and `Translations`: preserves ordered `VarFileInfo` records and
+  decodes `(LanguageID, CodePage)` pairs from `"Translation"` binary values.
+- `UnknownBlocks`: retains unrecognized child blocks directly inside
+  `VS_VERSION_INFO` with owned raw value and remainder slices.
+
+`ParseVersionInfo` enforces child-length bounds, 4-byte alignment, NUL
+termination for node keys, unit semantics (`wType == VersionValueText` counts
+UTF-16 code units while `wType == VersionValueBinary` counts bytes), and explicit
+limits (`MaxVersionPayloadBytes`, `MaxVersionNodes`, `MaxVersionTables`,
+`MaxVersionStrings`, `MaxVersionTranslations`, `MaxVersionNameUnits`,
+`MaxVersionValueUnits`, and `MaxVersionOutputBytes`). On error, use `errors.Is`
+with `ErrInvalidVersionInfo` or `ErrVersionInfoLimit`.
 
 ### Verify Authenticode integrity and timestamps offline
 
