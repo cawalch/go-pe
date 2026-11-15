@@ -31,13 +31,35 @@ func Open(filename string) (*File, error) {
 // It returns an error if the headers are incomplete or invalid. It doesn't
 // validate the Windows loader's requirements or parse section bodies.
 //
+// New records int64(len(data)) as [File.FileSize], never the image's declared
+// file extent; parsing a truncated prefix succeeds as long as its headers and
+// section table fit in data. Call [File.DeclaredExtent] or [File.InputTruncated]
+// to detect when data is shorter than the declared headers, raw sections, or
+// certificate table, or call [NewWithLength] when only a stream prefix is
+// buffered and the full stream length is known.
+//
 // New reads data synchronously. The returned [File] owns its metadata and section
 // names and retains no reference to data. You can reuse or release data after
 // New returns.
 //
 // If section bodies are truncated, you can still inspect their headers.
-// Address translation returns offsets only for bytes within the original input.
+// Address translation returns offsets only for bytes within [File.FileSize].
 func New(data []byte) (*File, error) {
+	return NewWithLength(data, int64(len(data)))
+}
+
+// NewWithLength parses PE32 or PE32+ headers and the declared section table from
+// data while recording fileSize as the image's total byte length ([File.FileSize]).
+// This lets stream callers that retain only a leading prefix pass the full
+// stream length so [File.RVAToOffset] and [File.OffsetToRVA] do not clamp valid
+// section extents to len(data). Methods that read payloads still verify every
+// slice against len(data).
+//
+// Returns [ErrInvalidHeader] if fileSize is smaller than int64(len(data)).
+func NewWithLength(data []byte, fileSize int64) (*File, error) {
+	if fileSize < int64(len(data)) {
+		return nil, fmt.Errorf("%w: input length %d is smaller than buffer length %d", ErrInvalidHeader, fileSize, len(data))
+	}
 	r := NewSafeReader(data)
 
 	dos, err := parseDOSHeader(r)
@@ -87,8 +109,54 @@ func New(data []byte) (*File, error) {
 		FileHeader:     coff,
 		OptionalHeader: opt,
 		Sections:       sections,
-		fileSize:       int64(len(data)),
+		fileSize:       fileSize,
 	}, nil
+}
+
+// FileSize returns the byte length recorded by [New] or [NewWithLength] (or 0
+// when f is nil).
+func (f *File) FileSize() int64 {
+	if f == nil {
+		return 0
+	}
+	return f.fileSize
+}
+
+// DeclaredExtent returns the highest declared file byte offset referenced by
+// the PE headers, SizeOfHeaders, non-empty section raw ranges, and the
+// certificate data directory, or (0, false) when f is nil or has invalid DOS
+// header offsets.
+//
+// Virtual zero-fill regions (sections with SizeOfRawData == 0, or VirtualSize
+// exceeding SizeOfRawData) do not increase DeclaredExtent.
+func (f *File) DeclaredExtent() (uint64, bool) {
+	if f == nil || f.DOSHeader.AddressOfNewEXEHeader < dosHeaderSize {
+		return 0, false
+	}
+	extent := uint64(f.DOSHeader.AddressOfNewEXEHeader) + 24 + uint64(f.FileHeader.SizeOfOptionalHeader) + uint64(len(f.Sections))*40
+	extent = max(extent, uint64(f.OptionalHeader.SizeOfHeaders))
+	for _, sec := range f.Sections {
+		if sec.SizeOfRawData == 0 {
+			continue
+		}
+		secEnd := uint64(sec.PointerToRawData) + uint64(sec.SizeOfRawData)
+		extent = max(extent, secEnd)
+	}
+	if f.OptionalHeader.NumberOfRvaAndSizes > DataDirectoryCertificate {
+		cert := f.OptionalHeader.DataDirectories[DataDirectoryCertificate]
+		if cert.VirtualAddress != 0 && cert.Size != 0 {
+			certEnd := uint64(cert.VirtualAddress) + uint64(cert.Size)
+			extent = max(extent, certEnd)
+		}
+	}
+	return extent, true
+}
+
+// InputTruncated reports whether [File.FileSize] is smaller than
+// [File.DeclaredExtent].
+func (f *File) InputTruncated() bool {
+	extent, ok := f.DeclaredExtent()
+	return ok && (f.fileSize < 0 || extent > uint64(f.fileSize))
 }
 
 // IsDLL reports whether the COFF characteristics mark the image as a

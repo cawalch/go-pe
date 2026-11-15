@@ -113,8 +113,15 @@ control input size or I/O, acquire the bytes in your application and pass them t
 ## Use the parsed metadata
 
 `New` copies header values and section names without retaining the input buffer.
-You can reuse or release the buffer after `New` returns unless you plan to pass
-it to `Imports` or `Exports`. The returned `File` doesn't require a `Close` call.
+It records `int64(len(data))` as `File.FileSize`, not the declared image extent;
+a truncated input succeeds as long as its headers fit in `data`. Call
+`File.DeclaredExtent` or `File.InputTruncated` to detect when `FileSize` is
+smaller than the declared headers, raw sections, or certificate directory, or
+use `NewWithLength(data, streamLength)` when only a stream prefix is buffered
+while the full stream length is known. You can reuse or release the buffer
+after `New` or `NewWithLength` returns unless you plan to pass it to `Imports`,
+`Exports`, or another payload-reading method. The returned `File` doesn't require
+a `Close` call.
 
 If you don't modify its exported fields, you can read a `File` from multiple
 goroutines. `SectionByName` returns a pointer into `File.Sections`, so changes through
