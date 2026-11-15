@@ -139,7 +139,11 @@ duplicates. It doesn't retain the input, modify `File`, or cache results. Don't
 modify the input or `File` during a call. Names preserve their bytes without
 validating their encoding.
 
-The parser uses the import lookup table when present. If its RVA is zero, the
+The parser uses the import lookup table when present, while deriving each
+symbol's IAT slot RVA (`IATSlotRVA`, `HasIATSlot`) from `FirstThunk` and the
+PE32/PE32+ pointer width without dereferencing IAT pointer values (using
+`HasIATSlot == false, IATSlotRVA == 0` when `FirstThunk` is zero or the slot RVA
+overflows `uint32`). If its lookup-table RVA is zero, the
 parser uses the import address table only when the descriptor's timestamp is
 zero. A bound image with a lookup table is supported; a bound image without one
 returns `ErrInvalidImport`. The parser doesn't read the address table when a
