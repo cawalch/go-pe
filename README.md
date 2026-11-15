@@ -13,7 +13,7 @@ You can use go-pe to read:
 - DOS headers and Common Object File Format (COFF) file headers within PE images.
 - PE32 and PE32+ optional headers and the first 16 data directory descriptors.
 - Section headers and names, including names stored in a COFF string table.
-- Standard import descriptors, DLL names, and imports by name and hint or ordinal.
+- Standard import descriptors, DLL names, imports by name and hint or ordinal, and standard import hashes (`File.Imphash`, `Imphash`).
 - Export directories, address slots, ordinal values, name aliases, and raw forwarders.
 - Resource directory metadata, leaf paths, and bounded payload extraction (`File.Resources`, `File.ResourcePayload`).
 - Rich headers (`File.RichHeader`), decoding XOR keys, raw/clear byte spans, `(@comp.id, count)` entries, and explicit checksum status.
@@ -28,7 +28,7 @@ offsets. The `SafeReader` utility provides bounds-checked integer and string rea
 
 go-pe doesn't verify certificate trust chains, and it
 doesn't parse delayed imports or debug/CodeView directories.
-It doesn't resolve bound import addresses or calculate imphash values. It doesn't
+It doesn't resolve bound import addresses. It doesn't
 support standalone COFF objects, ROM images, loaded-memory images, memory-mapped
 input, or `io.ReaderAt`.
 
@@ -164,6 +164,13 @@ These limits bound parsing work and output. They aren't Windows loader limits.
 Use `errors.Is` with `ErrInvalidImport`, `ErrImportLimit`, or the bounds and
 string errors listed below to classify failures. An overlong name returns
 `ErrUnterminatedString` when no NUL byte occurs within `MaxImportNameBytes`.
+
+Use `file.Imphash(data)` (or `Imphash(libraries)` on already-parsed results) to
+compute the lowercase hexadecimal MD5 import hash using libyara-compatible
+extension stripping (`.dll`, `.ocx`, `.sys`) and frozen ordinal alias tables
+for `ws2_32.dll`, `wsock32.dll`, and `oleaut32.dll`. Images with zero imported
+symbols return `ErrNoImports` (from `File.Imphash`) or `("", false)` (from
+`Imphash`) rather than hashing the empty string to `md5("")`.
 
 ### Read standard exports
 
