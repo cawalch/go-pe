@@ -16,6 +16,7 @@ You can use go-pe to read:
 - Standard import descriptors, DLL names, and imports by name and hint or ordinal.
 - Export directories, address slots, ordinal values, name aliases, and raw forwarders.
 - Resource directory metadata, leaf paths, and bounded payload extraction (`File.Resources`, `File.ResourcePayload`).
+- Rich headers (`File.RichHeader`), decoding XOR keys, raw/clear byte spans, `(@comp.id, count)` entries, and explicit checksum status.
 - Bounded `VS_VERSION_INFO` version-information decoding (`ParseVersionInfo`), preserving ordered language/code-page tables, duplicate keys, translations, and unrecognized blocks.
 - Security directory attribute certificate (`WIN_CERTIFICATE`) metadata records and raw payload extraction.
 - Bounded PKCS#7 / CMS Authenticode signer, certificate, attribute, nested signature, and timestamp metadata without signature verification.
@@ -26,7 +27,7 @@ checks, and conversion between relative virtual addresses (RVAs) and file
 offsets. The `SafeReader` utility provides bounds-checked integer and string reads.
 
 go-pe doesn't verify certificate trust chains, and it
-doesn't parse delayed imports, Rich headers, or debug/CodeView directories.
+doesn't parse delayed imports or debug/CodeView directories.
 It doesn't resolve bound import addresses or calculate imphash values. It doesn't
 support standalone COFF objects, ROM images, loaded-memory images, memory-mapped
 input, or `io.ReaderAt`.
@@ -274,6 +275,23 @@ limits (`MaxVersionPayloadBytes`, `MaxVersionNodes`, `MaxVersionTables`,
 `MaxVersionStrings`, `MaxVersionTranslations`, `MaxVersionNameUnits`,
 `MaxVersionValueUnits`, and `MaxVersionOutputBytes`). On error, use `errors.Is`
 with `ErrInvalidVersionInfo` or `ErrVersionInfoLimit`.
+
+### Decode Rich headers
+
+Use `File.RichHeader` to locate and decode MSVC-style Rich metadata between the
+64-byte DOS header and `e_lfanew`:
+
+- Returns `(nil, nil)` when no `"Rich"` marker exists in `[64, e_lfanew)`.
+- Scans backward from `e_lfanew` for the last `"Rich"` marker and then backward
+  in 4-byte steps for the nearest XOR-encoded `"DanS"` marker.
+- Returns `Offset`, `RichOffset`, `Length`, `Key`, `RawData`, `ClearData`,
+  ordered `Entries` (`ToolID`, `Version`, `Count`), `ComputedChecksum`, and
+  `ChecksumValid`.
+- Computes and reports `ChecksumValid == false` on checksum mismatch rather than
+  returning an error; returns `ErrInvalidRichHeader` on missing matching markers,
+  zero XOR keys, short or unaligned spans, or non-zero header padding, and
+  `ErrRichHeaderLimit` when `MaxRichStubBytes`, `MaxRichHeaderBytes`, or
+  `MaxRichEntries` is exceeded.
 
 ### Verify Authenticode integrity and timestamps offline
 
