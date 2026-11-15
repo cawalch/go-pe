@@ -20,6 +20,11 @@
 // image-digest agreement, CMS signed attributes and signatures, PKCS#9/RFC 3161
 // timestamps, and optional explicit trust roots offline without ambient OS
 // trust or network lookups. None of these methods cache results.
+// Use [File.Resources] and [File.ResourcePayload] to read resource directory
+// headers, leaf paths, and explicit resource payloads under depth, graph, and
+// size bounds. Use [ParseVersionInfo] to decode VS_VERSION_INFO fixed file
+// information, ordered StringFileInfo tables, VarFileInfo translations, and
+// unrecognized child blocks from a resource payload without flattening keys.
 //
 // [File.RVAToOffset] and [File.OffsetToRVA] convert between relative virtual
 // addresses and offsets within the original input. These methods don't emulate
