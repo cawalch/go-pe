@@ -86,6 +86,9 @@ type AuthenticodeSignature struct {
 	Content          []byte
 	Certificates     []*x509.Certificate
 	Signers          []AuthenticodeSigner
+
+	encapContentKnown   bool
+	encapContentWrapped bool
 }
 
 // AuthenticodeIndirectData holds the parsed SpcIndirectDataContent payload
@@ -146,6 +149,11 @@ type AuthenticodeTimestamp struct {
 	Certificates    []*x509.Certificate
 	Signers         []AuthenticodeSigner
 	Raw             []byte
+
+	content             []byte
+	contentType         asn1.ObjectIdentifier
+	encapContentKnown   bool
+	encapContentWrapped bool
 }
 
 type authParseBudget struct {
@@ -363,13 +371,17 @@ func decodeSignedDataLayer(der []byte, recordOffset uint32, nestedDepth int, bud
 	}
 
 	var contentBytes []byte
+	var encapKnown bool
+	var encapWrapped bool
 	var indirect *AuthenticodeIndirectData
 	if len(sd.EncapContentInfo.Content.Bytes) > 0 {
-		rawInner, err := extractEncapContent(sd.EncapContentInfo.Content.Bytes)
+		rawInner, wrapped, err := extractEncapContent(sd.EncapContentInfo.Content.Bytes)
 		if err != nil {
 			return AuthenticodeSignature{}, nil, err
 		}
 		contentBytes = bytes.Clone(rawInner)
+		encapKnown = true
+		encapWrapped = wrapped
 		if sd.EncapContentInfo.ContentType.Equal(OIDSpcIndirectDataContent) {
 			parsedIndirect, err := decodeIndirectData(rawInner)
 			if err != nil {
@@ -385,28 +397,30 @@ func decodeSignedDataLayer(der []byte, recordOffset uint32, nestedDepth int, bud
 	}
 
 	return AuthenticodeSignature{
-		RecordOffset:     recordOffset,
-		NestedDepth:      nestedDepth,
-		Version:          sd.Version,
-		ContentType:      cloneOID(sd.EncapContentInfo.ContentType),
-		DigestAlgorithms: cloneAlgorithms(sd.DigestAlgorithms),
-		IndirectData:     indirect,
-		Content:          contentBytes,
-		Certificates:     certs,
-		Signers:          signers,
+		RecordOffset:        recordOffset,
+		NestedDepth:         nestedDepth,
+		Version:             sd.Version,
+		ContentType:         cloneOID(sd.EncapContentInfo.ContentType),
+		DigestAlgorithms:    cloneAlgorithms(sd.DigestAlgorithms),
+		IndirectData:        indirect,
+		Content:             contentBytes,
+		Certificates:        certs,
+		Signers:             signers,
+		encapContentKnown:   encapKnown,
+		encapContentWrapped: encapWrapped,
 	}, nestedBlobs, nil
 }
 
-func extractEncapContent(raw []byte) ([]byte, error) {
+func extractEncapContent(raw []byte) ([]byte, bool, error) {
 	var val asn1.RawValue
 	rest, err := asn1.Unmarshal(raw, &val)
 	if err != nil || len(rest) != 0 {
-		return nil, fmt.Errorf("%w: malformed encapsulated content", ErrInvalidAuthenticode)
+		return nil, false, fmt.Errorf("%w: malformed encapsulated content", ErrInvalidAuthenticode)
 	}
 	if val.Class == asn1.ClassUniversal && val.Tag == asn1.TagOctetString && !val.IsCompound {
-		return val.Bytes, nil
+		return val.Bytes, true, nil
 	}
-	return val.FullBytes, nil
+	return val.FullBytes, false, nil
 }
 
 func decodeIndirectData(raw []byte) (*AuthenticodeIndirectData, error) {
@@ -663,10 +677,14 @@ func decodeRFC3161Timestamp(raw []byte, budget *authParseBudget) (AuthenticodeTi
 		return AuthenticodeTimestamp{}, err
 	}
 	ts := AuthenticodeTimestamp{
-		Kind:         AuthenticodeTimestampRFC3161,
-		Certificates: sig.Certificates,
-		Signers:      sig.Signers,
-		Raw:          bytes.Clone(raw),
+		Kind:                AuthenticodeTimestampRFC3161,
+		Certificates:        sig.Certificates,
+		Signers:             sig.Signers,
+		Raw:                 bytes.Clone(raw),
+		content:             sig.Content,
+		contentType:         sig.ContentType,
+		encapContentKnown:   sig.encapContentKnown,
+		encapContentWrapped: sig.encapContentWrapped,
 	}
 	if sig.ContentType.Equal(OIDTSTInfo) && len(sig.Content) > 0 {
 		var tst rawTSTInfo

@@ -249,6 +249,32 @@ the non-excluded ranges, and unaligned unsigned binaries aren't padded with
 virtual zero bytes. Pass an unsupported `crypto.Hash` to check for
 `ErrUnsupportedDigestAlgorithm`.
 
+### Verify Authenticode integrity and timestamps offline
+
+Use `File.VerifyAuthenticode` or `File.VerifyAuthenticodeSignatures` with
+`AuthenticodeVerifyOptions` to evaluate offline verification claims separately
+without collapsing integrity, timestamp validity, and certificate trust into
+a single boolean:
+
+- `Digest`: compares computed PE Authenticode digests (`File.AuthenticodeDigests`)
+  against `SpcIndirectDataContent.MessageDigest` and distinguishes invalid
+  digests from unsupported algorithms.
+- `Binding` and `CMS`: resolve `SignerIdentifier` uniquely within the
+  `SignedData` certificate set, reject duplicate or multi-valued signed
+  attributes (`contentType`, `messageDigest`, `signingTime`), check encapsulated
+  content digests (both PKCS#7 v1 direct `SEQUENCE` contents and `OCTET STRING`
+  wrapped CMS content), and verify RSA PKCS#1 v1.5, RSA-PSS, ECDSA, and Ed25519
+  signatures offline.
+- `Timestamps`: verify legacy PKCS#9 countersignatures (`1.2.840.113549.1.9.6`)
+  and RFC 3161 `TSTInfo` tokens (`1.3.6.1.4.1.311.3.3.1` and
+  `1.2.840.113549.1.9.16.2.14`) against parent signature bytes and validity
+  bounds (`[NotBefore, NotAfter]` on both TSA and signer certificates).
+- `Trust`: remains `AuthenticodeStatusUnchecked` unless explicit `Roots` (or
+  `TimestampRoots`) are supplied in `AuthenticodeVerifyOptions`. Ambient OS
+  trust stores and network AIA/OCSP/CRL fetches are never consulted.
+- `MaxVerifyOps` (`MaxAuthenticodeVerifyOps = 512`) bounds cumulative
+  signature, timestamp, and chain verification work with `ErrAuthenticodeLimit`.
+
 ### Handle malformed input
 
 `New` returns either a complete header snapshot or an error. It requires complete
