@@ -16,12 +16,13 @@ You can use go-pe to read:
 - Standard import descriptors, DLL names, and imports by name and hint or ordinal.
 - Export directories, address slots, ordinal values, name aliases, and raw forwarders.
 - Security directory attribute certificate (`WIN_CERTIFICATE`) metadata records and raw payload extraction.
+- Bounded PKCS#7 / CMS Authenticode signer, certificate, attribute, nested signature, and timestamp metadata without signature verification.
 
 The library also provides section lookup, dynamic-link library (DLL) and format
 checks, and conversion between relative virtual addresses (RVAs) and file
 offsets. The `SafeReader` utility provides bounds-checked integer and string reads.
 
-go-pe doesn't verify Authenticode signatures or decode PKCS#7 payloads, and it
+go-pe doesn't verify Authenticode signatures or certificate trust chains, and it
 doesn't parse delayed imports, Rich headers, resources, or version information.
 It doesn't resolve bound import addresses or calculate imphash values. It doesn't
 support standalone COFF objects, ROM images, loaded-memory images, memory-mapped

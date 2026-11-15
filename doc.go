@@ -10,8 +10,10 @@
 // Use [File.Exports] to read export metadata, address slots, aliases, and forwarders
 // under separate table and string limits. Use [File.Certificates] and
 // [File.CertificatePayload] to enumerate bounded WIN_CERTIFICATE records and copy
-// raw certificate payloads without verifying Authenticode signatures. None of these
-// methods cache results.
+// raw certificate payloads. Use [File.AuthenticodeSignatures] and
+// [ParseAuthenticodeSignatures] to decode bounded PKCS#7 SignedData signer,
+// certificate, attribute, nested-signature, and timestamp metadata without
+// verifying digests or trust chains. None of these methods cache results.
 //
 // [File.RVAToOffset] and [File.OffsetToRVA] convert between relative virtual
 // addresses and offsets within the original input. These methods don't emulate
