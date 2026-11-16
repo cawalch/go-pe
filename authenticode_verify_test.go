@@ -656,9 +656,7 @@ func TestVerifyAuthenticodeNestedUnsignedLimitsAndRace(t *testing.T) {
 
 		var wg sync.WaitGroup
 		for range 8 {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				for range 5 {
 					res, err := f.VerifyAuthenticode(data, opts)
 					if err != nil {
@@ -672,7 +670,7 @@ func TestVerifyAuthenticodeNestedUnsignedLimitsAndRace(t *testing.T) {
 						return
 					}
 				}
-			}()
+			})
 		}
 		wg.Wait()
 	})

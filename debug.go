@@ -202,7 +202,7 @@ func (f *File) Debug(data []byte) ([]DebugEntry, error) {
 
 	entries := make([]DebugEntry, count)
 	remainingPayload := MaxDebugTotalBytes
-	for i := uint32(0); i < count; i++ {
+	for i := range count {
 		raw := table[i*debugDirectoryEntrySize : (i+1)*debugDirectoryEntrySize]
 		entry := DebugEntry{
 			Characteristics:  binary.LittleEndian.Uint32(raw[0:4]),

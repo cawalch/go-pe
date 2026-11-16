@@ -42,7 +42,7 @@ func TestHeaderParity(t *testing.T) {
 		for i := 154; i < countOffset; i++ {
 			data[i] = byte(i * 7)
 		}
-		for i := 0; i < 16; i++ {
+		for i := range 16 {
 			binary.LittleEndian.PutUint32(data[countOffset+4+i*8:], uint32(i+1)*4096)
 			binary.LittleEndian.PutUint32(data[countOffset+8+i*8:], uint32(i+1)*16)
 		}
@@ -98,7 +98,7 @@ func compareHeaderFields(t *testing.T, got, want any) {
 func TestTruncatedHeaders(t *testing.T) {
 	for _, data := range [][]byte{buildPE32(), buildMinimalPE(2)} {
 		headerEnd := 152 + int(binary.LittleEndian.Uint16(data[148:])) + 80
-		for end := 0; end < headerEnd; end++ {
+		for end := range headerEnd {
 			if f, err := New(data[:end]); err == nil || f != nil {
 				t.Fatalf("accepted truncated header at byte %d", end)
 			}
@@ -148,7 +148,7 @@ func TestDataDirectories(t *testing.T) {
 		// A 17th directory fits if the declared optional header is extended.
 		binary.LittleEndian.PutUint16(data[148:], 248)
 		binary.LittleEndian.PutUint32(data[260:], count)
-		for i := 0; i < 17; i++ {
+		for i := range 17 {
 			binary.LittleEndian.PutUint32(data[264+i*8:], uint32(i+1)*4096)
 			binary.LittleEndian.PutUint32(data[268+i*8:], uint32(i+1)*16)
 		}

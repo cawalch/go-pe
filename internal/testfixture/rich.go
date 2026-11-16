@@ -28,7 +28,7 @@ type RichOptions struct {
 func EncodeRichBlock(dosAndPrefix []byte, opts RichOptions) (block []byte, checksum uint32) {
 	dansOffset := len(dosAndPrefix)
 	checksum = uint32(dansOffset)
-	for i := 0; i < dansOffset; i++ {
+	for i := range dansOffset {
 		if i >= 0x3c && i < 0x40 {
 			continue
 		}

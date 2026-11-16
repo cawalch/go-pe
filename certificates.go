@@ -226,10 +226,7 @@ func certificateDirectoryBounds(f *File, data []byte) (dirStart, dirEnd uint64, 
 func certificateHeaderEnd(f *File) uint64 {
 	// Include the full DOS header, COFF header, optional header, and section table.
 	tableEnd := uint64(f.DOSHeader.AddressOfNewEXEHeader) + 24 + uint64(f.FileHeader.SizeOfOptionalHeader) + uint64(len(f.Sections))*40
-	if tableEnd < 64 {
-		tableEnd = 64
-	}
-	return max(tableEnd, uint64(f.OptionalHeader.SizeOfHeaders))
+	return max(tableEnd, 64, uint64(f.OptionalHeader.SizeOfHeaders))
 }
 
 func align8(n uint64) uint64 {

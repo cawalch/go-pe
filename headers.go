@@ -227,10 +227,7 @@ func parseDataDirectories(data []byte, opt *OptionalHeader) error {
 	if uint64(opt.NumberOfRvaAndSizes) > uint64(len(data)/8) {
 		return fmt.Errorf("%w: data directories exceed optional header", ErrInvalidHeader)
 	}
-	count := opt.NumberOfRvaAndSizes
-	if count > NumberOfDataDirectories {
-		count = NumberOfDataDirectories
-	}
+	count := min(opt.NumberOfRvaAndSizes, NumberOfDataDirectories)
 	for i := uint32(0); i < count; i++ {
 		entry := data[i*8 : (i+1)*8]
 		opt.DataDirectories[i] = DataDirectory{
