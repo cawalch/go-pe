@@ -7,6 +7,11 @@ import (
 
 func FuzzImports(f *testing.F) {
 	for _, is64 := range []bool{false, true} {
+		for _, count := range []int{16, 17, 18, 255, 256, 257} {
+			seed := buildImportsPE(is64, 2, count)
+			f.Add(is64, false, seed)
+			f.Add(is64, true, seed[512:])
+		}
 		data := buildImportsPE(is64, 2, 3)
 		f.Add(is64, false, data)
 		f.Add(is64, true, data[512:])
@@ -90,6 +95,51 @@ func FuzzImports(f *testing.F) {
 		}
 		if symbols > MaxImportSymbols || nameBytes > MaxImportStringBytes {
 			t.Fatal("unbounded import output")
+		}
+	})
+}
+
+func FuzzCountImportThunks(f *testing.F) {
+	for _, is64 := range []bool{false, true} {
+		width := 4
+		if is64 {
+			width = 8
+		}
+		for _, limit := range []uint8{0, 1, 238, 239} {
+			f.Add(is64, limit, []byte{})
+			f.Add(is64, limit, make([]byte, width-1))
+			f.Add(is64, limit, make([]byte, width))
+			data := make([]byte, 241*width)
+			for i := range 240 {
+				data[(i+1)*width-1] = 0x80
+			}
+			f.Add(is64, limit, data)
+		}
+	}
+	f.Fuzz(func(t *testing.T, is64 bool, rawLimit uint8, data []byte) {
+		width := 4
+		if is64 {
+			width = 8
+		}
+		limit := int(rawLimit) % 240
+		want := min(len(data)/width, limit)
+		wantTerminated := false
+		// Use byte-wise checks as an independent oracle for aligned words.
+		for i := 0; i <= want; i++ {
+			if (i+1)*width > len(data) {
+				break
+			}
+			zero := true
+			for _, value := range data[i*width : (i+1)*width] {
+				zero = zero && value == 0
+			}
+			if zero {
+				want, wantTerminated = i, true
+				break
+			}
+		}
+		if got, terminated := countImportThunks(data, width, limit); got != want || terminated != wantTerminated {
+			t.Fatalf("countImportThunks = %d, %t; want %d, %t", got, terminated, want, wantTerminated)
 		}
 	})
 }

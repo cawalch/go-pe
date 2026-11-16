@@ -121,6 +121,10 @@ func TestImportsStandardLibrary(t *testing.T) {
 	inputs := map[string][]byte{
 		"synthetic32": buildImportsPE(false, 3, 16),
 		"synthetic64": buildImportsPE(true, 3, 16),
+		"lookahead32": buildImportsPE(false, 2, 256),
+		"lookahead64": buildImportsPE(true, 2, 256),
+		"long32":      buildImportsPE(false, 2, 257),
+		"long64":      buildImportsPE(true, 2, 257),
 	}
 	for _, name := range []string{"gcc-386-mingw-exec", "gcc-amd64-mingw-exec", "gcc-386-mingw-no-symbols-exec"} {
 		data, err := os.ReadFile(filepath.Join(goroot, "src", "debug", "pe", "testdata", name))
