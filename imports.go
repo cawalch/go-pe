@@ -230,8 +230,41 @@ func (p *importParser) symbols(rva, firstThunk uint32, subtractVA bool, vaBase u
 				return nil, err
 			}
 		}
+		if len(symbols) == 16 {
+			// Delay lookahead until this symbol is valid, so small tables and
+			// early errors keep their allocation behavior. Bound the hint by
+			// both the remaining symbol budget and 256 symbols per library.
+			// Longer or unterminated tables keep the normal growth policy.
+			limit := min(256-len(symbols)-1, p.maxSymbols-p.symbolCount-1)
+			if count, terminated := countImportThunks(table, width, limit); terminated {
+				grown := make([]ImportSymbol, len(symbols), len(symbols)+1+count)
+				copy(grown, symbols)
+				symbols = grown
+			}
+		}
 		symbols = append(symbols, symbol)
 		p.symbolCount++
 	}
 	return nil, fmt.Errorf("%w: missing lookup-table terminator", p.invalidErr)
+}
+
+// countImportThunks supplies a capacity hint, not validation. The main loop
+// still checks each entry in order and owns all returned names and records.
+func countImportThunks(table []byte, width, limit int) (int, bool) {
+	count := 0
+	for len(table) >= width {
+		value := uint64(binary.LittleEndian.Uint32(table))
+		if width == 8 {
+			value = binary.LittleEndian.Uint64(table)
+		}
+		if value == 0 {
+			return count, true
+		}
+		if count == limit {
+			break
+		}
+		count++
+		table = table[width:]
+	}
+	return count, false
 }
