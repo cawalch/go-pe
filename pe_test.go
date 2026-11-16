@@ -42,7 +42,7 @@ func buildMinimalPE(numSections int) []byte {
 
 	// Section Table at 152 + 240 = 392 (40 bytes per section)
 	secOffset := 392
-	for i := 0; i < numSections; i++ {
+	for i := range numSections {
 		sec := data[secOffset+i*40 : secOffset+(i+1)*40]
 		name := ".text"
 		if i == 1 {

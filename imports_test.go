@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -113,12 +113,17 @@ func TestImports(t *testing.T) {
 }
 
 func TestImportsStandardLibrary(t *testing.T) {
+	root, err := exec.Command("go", "env", "GOROOT").Output()
+	if err != nil {
+		t.Fatalf("locate Go toolchain fixtures: %v", err)
+	}
+	goroot := strings.TrimSpace(string(root))
 	inputs := map[string][]byte{
 		"synthetic32": buildImportsPE(false, 3, 16),
 		"synthetic64": buildImportsPE(true, 3, 16),
 	}
 	for _, name := range []string{"gcc-386-mingw-exec", "gcc-amd64-mingw-exec", "gcc-386-mingw-no-symbols-exec"} {
-		data, err := os.ReadFile(filepath.Join(runtime.GOROOT(), "src", "debug", "pe", "testdata", name))
+		data, err := os.ReadFile(filepath.Join(goroot, "src", "debug", "pe", "testdata", name))
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -117,7 +117,7 @@ func (f *File) Exports(data []byte) (*ExportDirectory, error) {
 	if names != 0 {
 		counts = make([]uint32, functions)
 	}
-	for i := uint32(0); i < names; i++ {
+	for i := range names {
 		index := binary.LittleEndian.Uint16(ordinals[i*2:])
 		if uint32(index) >= functions {
 			return nil, fmt.Errorf("%w: name ordinal outside address table", ErrInvalidExport)
@@ -157,7 +157,7 @@ func (f *File) Exports(data []byte) (*ExportDirectory, error) {
 			}
 		}
 	}
-	for i := uint32(0); i < names; i++ {
+	for i := range names {
 		index := binary.LittleEndian.Uint16(ordinals[i*2:])
 		name, err := p.name(binary.LittleEndian.Uint32(pointers[i*4:]), 1<<32)
 		if err != nil {

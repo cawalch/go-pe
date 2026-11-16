@@ -636,9 +636,7 @@ func decodeUnauthenticatedAttributes(attrs []AuthenticodeAttribute, budget *auth
 	for _, attr := range attrs {
 		switch {
 		case attr.Type.Equal(OIDNestedSignature):
-			for _, v := range attr.Values {
-				nestedBlobs = append(nestedBlobs, v)
-			}
+			nestedBlobs = append(nestedBlobs, attr.Values...)
 		case attr.Type.Equal(OIDCountersignature):
 			for _, v := range attr.Values {
 				signer, blobs, err := decodeSignerInfo(v, budget)

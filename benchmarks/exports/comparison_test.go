@@ -9,8 +9,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	binjectpe "github.com/Binject/debug/pe"
@@ -44,7 +46,11 @@ func importOptions() *saferwall.Options {
 
 func gorootFixture(tb testing.TB, name string) []byte {
 	tb.Helper()
-	path := filepath.Join(runtime.GOROOT(), "src", "debug", "pe", "testdata", name)
+	root, err := exec.Command("go", "env", "GOROOT").Output()
+	if err != nil {
+		tb.Fatalf("locate Go toolchain fixtures: %v", err)
+	}
+	path := filepath.Join(strings.TrimSpace(string(root)), "src", "debug", "pe", "testdata", name)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		tb.Fatal(err)

@@ -656,9 +656,7 @@ func TestVerifyAuthenticodeNestedUnsignedLimitsAndRace(t *testing.T) {
 
 		var wg sync.WaitGroup
 		for range 8 {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				for range 5 {
 					res, err := f.VerifyAuthenticode(data, opts)
 					if err != nil {
@@ -672,8 +670,55 @@ func TestVerifyAuthenticodeNestedUnsignedLimitsAndRace(t *testing.T) {
 						return
 					}
 				}
-			}()
+			})
 		}
 		wg.Wait()
 	})
+}
+
+func TestVerifyAuthenticodeTimestampChainBudget(t *testing.T) {
+	pki := testfixture.NewAuthenticodePKI(testfixture.AuthenticodePKIOptions{})
+	signingTime := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
+	for _, kind := range []string{"PKCS9", "RFC3161"} {
+		t.Run(kind, func(t *testing.T) {
+			opts := testfixture.SignedPKCS7Options{
+				SignerCert: pki.SignerCert,
+				SignerKey:  pki.SignerKey,
+				ExtraCerts: []*x509.Certificate{pki.InterCert, pki.TSACert},
+				TSACert:    pki.TSACert,
+				TSAKey:     pki.TSAKey,
+			}
+			if kind == "PKCS9" {
+				opts.PKCS9At = signingTime
+			} else {
+				opts.RFC3161At = signingTime
+			}
+			data, f := signSyntheticPE(t, true, crypto.SHA256, opts)
+			chainChecks := 0
+			roots := x509.NewCertPool()
+			roots.AddCertWithConstraint(pki.RootCert, func([]*x509.Certificate) error {
+				chainChecks++
+				return nil
+			})
+			// The signature, signer, and timestamp consume the first three
+			// operations. The timestamp chain must not start without a fourth.
+			verifyOpts := pe.AuthenticodeVerifyOptions{TimestampRoots: roots, MaxVerifyOps: 3}
+			result, err := f.VerifyAuthenticode(data, verifyOpts)
+			if !errors.Is(err, pe.ErrAuthenticodeLimit) || len(result.Signatures) != 0 {
+				t.Fatalf("VerifyAuthenticode = %+v, %v; want no results and ErrAuthenticodeLimit", result, err)
+			}
+			if chainChecks != 0 {
+				t.Fatalf("performed %d chain checks after exhausting the budget", chainChecks)
+			}
+
+			verifyOpts.MaxVerifyOps = 4
+			result, err = f.VerifyAuthenticode(data, verifyOpts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if chainChecks == 0 || result.Signatures[0].Signers[0].Timestamps[0].Trust.Status != pe.AuthenticodeStatusValid {
+				t.Fatal("timestamp chain was not verified with sufficient budget")
+			}
+		})
+	}
 }

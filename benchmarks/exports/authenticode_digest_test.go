@@ -341,9 +341,8 @@ func BenchmarkAuthenticodeDigestComparison(b *testing.B) {
 	blob, _ := testfixture.AuthenticodeBlob(testfixture.AuthenticodeOptions{
 		IncludeCertificate: true,
 	})
-	signed1MiB := append(append(testfixture.Minimal(true, 1), make([]byte, 1<<20)...), make([]byte, 0)...)
 	// Update certificate table at end of 1MiB synthetic image.
-	signed1MiB = func() []byte {
+	signed1MiB := func() []byte {
 		base := append(testfixture.Minimal(true, 1), make([]byte, 1<<20)...)
 		if rem := len(base) % 8; rem != 0 {
 			base = append(base, make([]byte, 8-rem)...)

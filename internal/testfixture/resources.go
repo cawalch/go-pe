@@ -89,8 +89,7 @@ func ResourcesWithDataSection(is64 bool, root *ResourceNodeSpec, extraData []byt
 	var namedPendings []pendingEntry
 	var leafPendings []pendingEntry
 
-	var allocNode func(n *ResourceNodeSpec) uint32
-	allocNode = func(n *ResourceNodeSpec) uint32 {
+	allocNode := func(n *ResourceNodeSpec) uint32 {
 		if off, ok := nodeOffsets[n]; ok {
 			return off
 		}

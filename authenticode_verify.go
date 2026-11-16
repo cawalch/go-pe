@@ -699,7 +699,10 @@ func verifyTSATrust(
 		return
 	}
 	if budget != nil {
-		_ = budget.consume("timestamp chain")
+		if err := budget.consume("timestamp chain"); err != nil {
+			// The caller returns ErrAuthenticodeLimit for an exhausted budget.
+			return
+		}
 	}
 	evalTime := signingTime
 	if !opts.VerificationTime.IsZero() {
