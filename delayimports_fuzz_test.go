@@ -8,6 +8,11 @@ import (
 )
 
 func FuzzDelayImports(f *testing.F) {
+	for _, count := range []int{16, 17, 18, 255, 256, 257} {
+		f.Add(testfixture.DelayImports(false, 2, count))
+		f.Add(testfixture.DelayImports(true, 2, count))
+		f.Add(testfixture.DelayImportsWithAttributes(false, 0, 2, count))
+	}
 	f.Add(testfixture.Minimal(false, 1))
 	f.Add(testfixture.Minimal(true, 1))
 	f.Add(testfixture.DelayImports(false, 2, 3))

@@ -251,20 +251,24 @@ func (p *importParser) symbols(rva, firstThunk uint32, subtractVA bool, vaBase u
 // countImportThunks supplies a capacity hint, not validation. The main loop
 // still checks each entry in order and owns all returned names and records.
 func countImportThunks(table []byte, width, limit int) (int, bool) {
-	count := 0
-	for len(table) >= width {
-		value := uint64(binary.LittleEndian.Uint32(table))
-		if width == 8 {
-			value = binary.LittleEndian.Uint64(table)
+	// Include the slot after limit symbols so a terminator at the budget
+	// boundary is accepted. Discard any trailing partial slot before scanning.
+	slots := min(len(table)/width, limit+1)
+	table = table[:slots*width]
+	if width == 8 {
+		for count := 0; len(table) >= 8; count++ {
+			if binary.LittleEndian.Uint64(table) == 0 {
+				return count, true
+			}
+			table = table[8:]
 		}
-		if value == 0 {
-			return count, true
+	} else {
+		for count := 0; len(table) >= 4; count++ {
+			if binary.LittleEndian.Uint32(table) == 0 {
+				return count, true
+			}
+			table = table[4:]
 		}
-		if count == limit {
-			break
-		}
-		count++
-		table = table[width:]
 	}
-	return count, false
+	return min(slots, limit), false
 }
