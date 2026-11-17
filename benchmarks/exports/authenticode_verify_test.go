@@ -169,6 +169,49 @@ func TestCrossLibraryAuthenticodeVerify(t *testing.T) {
 	})
 }
 
+// Mutate a hashed section byte in each upstream signed fixture. A valid CMS
+// signature alone must not conceal an invalid image digest.
+func TestSignedCorpusTampering(t *testing.T) {
+	for _, path := range []string{"authenticode/testdata/test.pecoff.signed", "tests/data/binary/HelloWorld.efi.signed"} {
+		t.Run(path, func(t *testing.T) {
+			data := bytes.Clone(goUEFIFixture(t, path))
+			f, err := gope.New(data)
+			if err != nil {
+				t.Fatal(err)
+			}
+			mutated := false
+			for _, section := range f.Sections {
+				if section.SizeOfRawData > 0 && uint64(section.PointerToRawData) < uint64(len(data)) {
+					data[section.PointerToRawData] ^= 1
+					mutated = true
+					break
+				}
+			}
+			if !mutated {
+				t.Fatal("fixture has no backed section to mutate")
+			}
+			result, err := f.VerifyAuthenticode(data, gope.AuthenticodeVerifyOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(result.Signatures) == 0 || len(result.Signatures[0].Signers) == 0 {
+				t.Fatal("missing signature or signer")
+			}
+			sig := result.Signatures[0]
+			if sig.Digest.Status != gope.AuthenticodeStatusInvalid || sig.Signers[0].CMS.Status != gope.AuthenticodeStatusValid || sig.Signers[0].Trust.Status != gope.AuthenticodeStatusUnchecked {
+				t.Fatalf("unexpected tamper result: %+v", sig)
+			}
+			other, err := authenticode.Parse(bytes.NewReader(data))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if ok, err := other.Verify(sig.Signers[0].SignerCertificate); ok || err == nil {
+				t.Fatal("go-uefi accepted modified image")
+			}
+		})
+	}
+}
+
 func BenchmarkVerifyAuthenticodeCrossLibrary(b *testing.B) {
 	data := goUEFIFixture(b, "authenticode/testdata/test.pecoff.signed")
 	dbCert := parseFirstPEMCert(b, goUEFIFixture(b, "authenticode/testdata/db.pem"))

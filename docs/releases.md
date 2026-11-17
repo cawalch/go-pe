@@ -21,7 +21,8 @@ Use current security patches when building applications.
 1. Review the API, README example, parsing guide, security policy, and MIT license.
    Describe implemented features and limits, including offline Authenticode
    verification. Do not imply Windows trust equivalence.
-2. Run the checks in [Contributing](../CONTRIBUTING.md#validate-a-change), including
+2. Review the [validation inventory](validation.md), including corpus gaps and
+   Authenticode assurance limits. Run the checks in [Contributing](../CONTRIBUTING.md#validate-a-change), including
    the comparison module and vulnerability checks. Review CI for the exact
    candidate commit on Linux, macOS, and Windows. Resolve failures before release.
 3. Review dependency and security alerts. Follow the owner checklist below.

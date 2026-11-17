@@ -38,7 +38,7 @@ func goUEFIFixture(tb testing.TB, rel string) []byte {
 		goUEFIDirPath = strings.TrimSpace(string(out))
 	})
 	if goUEFIDirErr != nil {
-		tb.Skipf("unable to locate go-uefi module cache: %v", goUEFIDirErr)
+		tb.Fatalf("unable to locate required go-uefi corpus: %v", goUEFIDirErr)
 	}
 	data, err := os.ReadFile(filepath.Join(goUEFIDirPath, rel))
 	if err != nil {
