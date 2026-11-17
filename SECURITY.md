@@ -13,8 +13,9 @@ coordinating a fix. GitHub private vulnerability reporting is not enabled as of
 
 ## Supported versions and limits
 
-The project is experimental and has no tagged releases yet. Fixes target the
-latest development revision; older commits have no maintained security branch.
+The project is experimental; v0.1.0 is the first tagged release. Fixes target the
+latest development revision and are published in subsequent releases. Older
+versions have no maintained security branch.
 Use a supported Go toolchain with current security patches, including for this
 standard-library-only module.
 
