@@ -4,7 +4,9 @@ go-pe is a Go library for reading Windows Portable Executable (PE) files. It
 supports PE32 and PE32+, uses only the Go standard library, and requires
 Go 1.26 or later.
 
-The library is in early development. No stable release is available.
+The library is an experimental MVP. No tagged release is available yet, and the
+API can change before v1.0.0. See the [release guide](docs/releases.md) for
+versioning and publishing plans.
 
 ## Supported features
 
@@ -14,7 +16,8 @@ The library is in early development. No stable release is available.
 - Read resources, version information, Rich headers, and CodeView debug records.
 - Extract attribute certificates and Authenticode signature metadata.
 - Compute Authenticode image digests and verify signatures and timestamps
-  offline. Certificate trust checks require caller-supplied roots.
+  offline. Certificate trust checks require caller-supplied roots. Verification
+  does not perform revocation checks or reproduce Windows trust policy.
 
 The library doesn't parse external PDB symbol files or resolve bound import
 addresses. It doesn't support standalone Common Object File Format (COFF)
@@ -152,4 +155,6 @@ you install Go.
 - [Workload comparisons and parser audit](docs/workloads-and-audit.md)
 - [Related libraries](docs/parsing.md#related-libraries)
 - [Microsoft PE specification](https://learn.microsoft.com/en-us/windows/win32/debug/pe-format)
+- [Security policy](SECURITY.md)
+- [Release guide](docs/releases.md)
 - [MIT license](LICENSE)

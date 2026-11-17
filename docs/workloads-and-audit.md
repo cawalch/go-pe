@@ -6,6 +6,11 @@ work limits and resource bounds across headers, standard imports, standard
 exports, malformed inputs, and non-PE rejection without comparing eager full
 parsing against header-only parsing as equivalent.
 
+This is a historical comparison of commit `1fd2b31748950d1030ddbf2ff90f1eae4f7d37b2`
+(2026-11-12), not an audit of the current release. The results do not measure
+later parser changes or metadata and Authenticode features. For current behavior
+and limits, see the [parsing guide](parsing.md).
+
 ## Reproducibility metadata
 
 - **CPU and OS:** Apple M3 Max, `darwin/arm64` (`GOMAXPROCS=14`)
@@ -49,12 +54,11 @@ benchstat results/comparison-workloads.txt
 ### Work and output bounds
 
 `go-pe` executes synchronously without cancellation callbacks or internal caches.
-Each entry point caps total read work and heap allocations before trusting
-declared counts:
+The entry points examined in this historical audit apply the following limits:
 
 | Entry point | Hard limits | Worst-case work / allocation notes |
 | --- | --- | --- |
-| `New` / `Open` | `MaxSections = 256`, `MaxSectionNameBytes = 256`, first `16` data directories (`NumberOfDataDirectories`) | Validates the `40*N`-byte section table (max `10,240` B) before allocating `[]Section`. Resolves up to `256` COFF long names (`<= 64` KiB total). `OptionalHeader` is a zero-copy slice (`uint16` size) and section bodies are never read. `Open` calls `os.ReadFile` eagerly, so callers must bound file size if reading untrusted paths. |
+| `New` / `Open` | `MaxSections = 256`, `MaxSectionNameBytes = 256`, first `16` data directories (`NumberOfDataDirectories`) | Validates the `40*N`-byte section table (max `10,240` B) before allocating `[]Section`. Resolves up to `256` COFF long names (`<= 64` KiB total). `OptionalHeader` contains copied values, including a fixed-size data-directory array; it does not retain the input. Section bodies are never read. `Open` calls `os.ReadFile` eagerly, so callers must bound file size if reading untrusted paths. |
 | `File.Imports` | `MaxImportLibraries = 1,024`, `MaxImportSymbols = 65,536`, `MaxImportNameBytes = 4,096`, `MaxImportStringBytes = 1 MiB` | `1 MiB` budget decrements on every DLL and symbol name, including NULs and repeated RVA references. Each descriptor lookup table and named thunk calls `rvaSpan`, which scans up to `MaxSections` (`256`) sections twice (`<= 33.5M` section comparisons worst case at 65,536 symbols across 256 sections). Returns `nil, nil` with `0` allocations if no import directory exists. |
 | `File.Exports` | `MaxExportSymbols = 65,536`, `MaxExportNames = 65,536`, `MaxExportNameBytes = 4,096`, `MaxExportStringBytes = 1 MiB` | Validates directory extent overflow, ordinal-base overflow, table bounds, and every ordinal-table index before allocating `Symbols` and the single alias string backing array (`pool := make([]string, names)`). String budget covers `DLL`, forwarders, and names including repeated references and NULs. Returns `nil, nil` with `0` allocations if no export directory exists. |
 
@@ -84,7 +88,8 @@ declared counts:
 | Over export limit (`65,537` slots) | `ErrExportLimit` (`nil` result) | Unsupported (no export parser) | Accepts (`exports`) | Partial / logs warning, returns `nil` error | Unsupported |
 | Unmapped import DLL RVA | `ErrOutOfBounds` (`nil` result) | Ignores error, keeps library with empty DLL | Ignores error, keeps library with empty DLL | Logs warning, returns `nil` error (partial recovery) | Skips via offset `0`, no error |
 
-`go-pe` enforces atomic error handling: on any malformed structure, truncated
+The header, import, and export parsers examined here enforce atomic error handling:
+on malformed structure, truncated
 span, integer overflow (`ErrIntegerOverflow`), or limit breach
 (`ErrSectionLimit`, `ErrImportLimit`, `ErrExportLimit`), methods discard
 partial state and return `(nil, err)`. Errors classify with `errors.Is` using
@@ -202,18 +207,17 @@ Paired core benchmarks before vs. after adding test coverage show zero productio
 code changes, identical allocation counts (`allocs/op`), and `0 B` allocation
 differences on `New`, `StandardLibraryHeaders`, and `RVAToOffset`.
 
-## Directory gating by consumer evidence
+## Feature scope since the comparison
 
-Future directory parsers in `go-pe` remain gated on verified consumer need
-rather than speculative format completeness. Based on the YARA Forge capability
-audit recorded for `go-yara`:
+As of 2026-11-17, the library implements resources, version information, Rich
+headers, attribute certificates, delayed imports, CodeView debug metadata,
+import hashing, and offline Authenticode parsing, digest calculation, and
+signature and timestamp verification. These features are outside the benchmark
+results above. Offline verification does not establish Windows trust equivalence.
 
-- **Justified next directories:** Resources and `VS_VERSIONINFO` version strings
-  (`go-pe#7`), Rich headers (`go-pe#9`), and security certificates
-  (`WIN_CERTIFICATE`, `go-pe#11` / `#13`), alongside delayed imports, PDB debug
-  metadata, and import hashing where demanded by consumers.
-- **Deferred until consumer demand is shown:** Standalone COFF object support,
-  TLS callbacks, base relocations, exception tables, load-config directories,
-  bound imports, and CLR metadata parsing (`DataDirectories` header entries already
-  expose `VirtualAddress` and `Size` for raw presence checks such as
-  `IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR`).
+Standalone COFF objects, TLS callbacks, base relocations, exception tables,
+load-config directories, bound-import resolution, and CLR metadata parsing
+remain outside the implemented scope. Data-directory header entries expose
+addresses and sizes; they do not parse the corresponding structures. Scope new
+features from concrete consumer needs, as described in
+[Contributing](../CONTRIBUTING.md#scope-a-change).
