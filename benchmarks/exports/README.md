@@ -68,3 +68,10 @@ the CPU, Go version, source revision, sample duration, and raw results. Use
 
 The [recorded samples](results/README.md) include the source revisions, measured
 medians, and the baseline check for the shared RVA-bounds helper.
+
+## Broader validation
+
+This module also contains metadata and Authenticode comparisons and a benign
+Go compiler corpus for Windows 386, amd64, and arm64. See the
+[validation inventory](../../docs/validation.md) for provenance, assertions,
+malformed-input cases, dependency review, and remaining assurance gaps.

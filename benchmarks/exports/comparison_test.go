@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -134,26 +135,34 @@ func TestCrossLibraryHeadersAndImports(t *testing.T) {
 				t.Fatalf("saferwall import Parse: %v", err)
 			}
 
+			var named []string
 			gotNamed := 0
 			for _, lib := range libs {
 				for _, sym := range lib.Symbols {
 					if !sym.ByOrdinal {
 						gotNamed++
+						named = append(named, sym.Name+":"+lib.DLL)
 					}
 				}
 			}
-			if gotNamed != len(stdSyms) || gotNamed != len(binSyms) {
-				t.Fatalf("named import counts differ: go-pe=%d debug/pe=%d binject=%d", gotNamed, len(stdSyms), len(binSyms))
+			if !reflect.DeepEqual(named, stdSyms) || !reflect.DeepEqual(named, binSyms) {
+				t.Fatalf("named imports differ: go-pe=%v debug/pe=%v binject=%v", named, stdSyms, binSyms)
 			}
 			if len(libs) != len(swImpF.Imports) {
 				t.Fatalf("import DLL counts differ: go-pe=%d saferwall=%d", len(libs), len(swImpF.Imports))
 			}
 			for i, swLib := range swImpF.Imports {
+				if libs[i].DLL != swLib.Name {
+					t.Fatalf("DLL[%d] = %q, saferwall = %q", i, libs[i].DLL, swLib.Name)
+				}
 				if len(libs[i].Symbols) != len(swLib.Functions) {
 					t.Fatalf("import[%d] symbol counts differ: go-pe=%d saferwall=%d", i, len(libs[i].Symbols), len(swLib.Functions))
 				}
 				for j, swSym := range swLib.Functions {
 					sym := libs[i].Symbols[j]
+					if sym.ByOrdinal != swSym.ByOrdinal || (sym.ByOrdinal && uint32(sym.Ordinal) != swSym.Ordinal) || (!sym.ByOrdinal && (sym.Name != swSym.Name || sym.Hint != swSym.Hint)) {
+						t.Fatalf("import[%d][%d] differs: go-pe=%+v saferwall=%+v", i, j, sym, swSym)
+					}
 					if !sym.HasIATSlot || sym.IATSlotRVA != swSym.ThunkRVA {
 						t.Fatalf("import[%d][%d] IATSlotRVA=%#x (has=%t), saferwall ThunkRVA=%#x", i, j, sym.IATSlotRVA, sym.HasIATSlot, swSym.ThunkRVA)
 					}

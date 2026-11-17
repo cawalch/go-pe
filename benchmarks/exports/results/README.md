@@ -8,7 +8,8 @@ The text files preserve each timing and allocation sample. Repeated headers and
 command completion messages have been removed. Each case has six samples:
 
 - `comparison.txt`: headers and exports from the same PE32+ fixtures; 1 second
-  per sample. Dependency versions are pinned in the comparison module's `go.mod`.
+  per sample. Dependency versions are pinned in the comparison module's `go.mod` at
+  `d5dd107`; later dependency updates do not refresh these measurements.
 - `exports.txt`: export parsing from an existing header snapshot; 500 milliseconds
   per sample. The two rejection cases measure an absent directory and an address
   count above `MaxExportSymbols`.
