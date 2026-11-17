@@ -89,7 +89,7 @@ forwarder string with Windows loader resolution, call the generated function
 benign, locally compiled DLLs are loaded; no external corpus binary is executed.
 This tests Clang's compiler with the MSVC linker, not an independent LLVM linker.
 
-The job also reads the runner's installed Windows PowerShell executable. It
+The job also reads the runner's installed MSVC compiler executable (`cl.exe`). It
 requires an embedded signature and timestamp, checks image digest, CMS, timestamp
 imprint and timestamp CMS integrity, and requires trust to remain unchecked in
 go-pe without explicit roots. It compares the original image and a temporary
@@ -107,7 +107,7 @@ and [WINTRUST_DATA flags](https://learn.microsoft.com/en-us/windows/win32/api/wi
 
 Run the script on a disposable Windows amd64 host with Go, Visual Studio C++ tools,
 and LLVM installed. It changes compiler environment variables only in the current
-process. The tests are opt-in outside this CI step. The signed OS file is read
+process. The tests are opt-in outside this CI step. The signed compiler file is read
 from its existing installation and is never committed, uploaded, or redistributed;
 only a temporary mutated copy is written and deleted by the test harness. Generated
 DLLs use repository-authored source under this repository's license.

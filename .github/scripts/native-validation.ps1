@@ -9,9 +9,9 @@ $env:PATH = "${env:ProgramFiles}\LLVM\bin;$env:PATH"
 Get-Command cl.exe, clang-cl.exe | ForEach-Object {
     $item = Get-Item $_.Source
     [PSCustomObject]@{ Name = $_.Name; Path = $_.Source; Version = $item.VersionInfo.FileVersion }
-}
+} | Format-List | Out-String | Write-Host
 $env:GO_PE_NATIVE_VALIDATION = '1'
-$env:GO_PE_SIGNED_FIXTURE = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+$env:GO_PE_SIGNED_FIXTURE = (Get-Command cl.exe).Source
 [Environment]::OSVersion.VersionString
 go test -count=1 -v -run '^TestNativeWindows' .
 if ($LASTEXITCODE -ne 0) { throw 'Native Windows validation failed.' }
