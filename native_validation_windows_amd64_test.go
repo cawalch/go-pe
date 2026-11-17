@@ -25,16 +25,16 @@ func TestNativeWindowsCompilers(t *testing.T) {
 		t.Run(compiler, func(t *testing.T) {
 			dir := t.TempDir()
 			source := filepath.Join(dir, "fixture.c")
-			// Only this benign source is executed, never the signed OS sample below.
+			// Only this benign source is executed, never the signed compiler sample below.
 			if err := os.WriteFile(source, []byte("int Answer(void) { return 42; }\n"), 0600); err != nil {
 				t.Fatal(err)
 			}
 			definition := filepath.Join(dir, "fixture.def")
-			if err := os.WriteFile(definition, []byte("LIBRARY fixture\nEXPORTS\nAnswer @1\nForwarded=KERNEL32.GetCurrentProcessId @2\n"), 0600); err != nil {
+			if err := os.WriteFile(definition, []byte("LIBRARY fixture\nEXPORTS\nAnswer @1\nForwarded=KERNEL32.GetCurrentProcessId @2 PRIVATE\n"), 0600); err != nil {
 				t.Fatal(err)
 			}
 			dll := filepath.Join(dir, "fixture.dll")
-			cmd := exec.Command(compiler, "/nologo", "/LD", "/GS-", source, "/link", "/NOENTRY", "/NODEFAULTLIB", "/OUT:"+dll, "/DEF:"+definition)
+			cmd := exec.Command(compiler, "/nologo", "/LD", "/GS-", source, "/link", "/NOENTRY", "/NODEFAULTLIB", "kernel32.lib", "/OUT:"+dll, "/DEF:"+definition)
 			cmd.Dir = dir
 			if out, err := cmd.CombinedOutput(); err != nil {
 				t.Fatalf("compile: %v\n%s", err, out)
