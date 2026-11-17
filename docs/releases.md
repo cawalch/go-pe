@@ -1,12 +1,13 @@
 # Release an experimental version
 
-This guide describes maintainer actions. It does not announce a release.
-The module has no tagged release as of 2026-11-17.
+This guide describes maintainer actions. The first experimental release,
+[v0.1.0](https://github.com/cawalch/go-pe/releases/tag/v0.1.0), was published on
+2026-11-17 from commit `b7801b4fce05bc41a27ea7f4aa136bc87233b6b9`.
 
 ## Choose a version
 
-Use semantic versions. Start the experimental MVP with `v0.1.0`, or use
-`v0.1.0-rc.1` for a release candidate. Before v1.0.0, document breaking changes
+Use semantic versions. The experimental MVP starts at `v0.1.0`. For future
+release candidates, use a prerelease suffix such as `v0.2.0-rc.1`. Before v1.0.0, document breaking changes
 in release notes and increase the minor version for them. Use patch versions
 for compatible fixes. Consumers should pin a version and review updates.
 
