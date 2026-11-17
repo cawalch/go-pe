@@ -80,6 +80,10 @@ jobs:
           go-version: stable
           cache: false
       - run: go test ./...
+      - name: Validate native compilers and offline Windows trust
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./.github/scripts/native-validation.ps1
 
   vulnerabilities:
     runs-on: ubuntu-latest
