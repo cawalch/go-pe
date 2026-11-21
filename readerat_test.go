@@ -200,3 +200,50 @@ func TestImportsFromReaderAt(t *testing.T) {
 		})
 	}
 }
+
+func TestExportsAndCertificatesFromReaderAt(t *testing.T) {
+	if _, err := (*pe.File)(nil).ExportsFromReaderAt(bytes.NewReader(nil)); !errors.Is(err, pe.ErrInvalidHeader) {
+		t.Fatalf("nil File ExportsFromReaderAt err = %v", err)
+	}
+	if _, err := (*pe.File)(nil).CertificatesFromReaderAt(bytes.NewReader(nil)); !errors.Is(err, pe.ErrInvalidHeader) {
+		t.Fatalf("nil File CertificatesFromReaderAt err = %v", err)
+	}
+
+	expData := testfixture.Exports(true, 16)
+	ef, err := pe.NewFromReaderAt(bytes.NewReader(expData), int64(len(expData)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantExp, err := ef.Exports(expData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotExp, err := ef.ExportsFromReaderAt(&chunkedReaderAt{data: expData, maxChunk: 32, eofOnLast: true})
+	if err != nil {
+		t.Fatalf("ExportsFromReaderAt: %v", err)
+	}
+	if !reflect.DeepEqual(gotExp, wantExp) {
+		t.Fatalf("ExportsFromReaderAt != Exports")
+	}
+
+	certData := testfixture.Certificates(true, testfixture.CertificateSpec{
+		Revision: pe.CertificateRevision2_0,
+		Type:     pe.CertificateTypePKCS7SignedData,
+		Payload:  []byte{1, 2, 3, 4, 5},
+	})
+	cf, err := pe.NewFromReaderAt(bytes.NewReader(certData), int64(len(certData)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantCerts, err := cf.Certificates(certData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotCerts, err := cf.CertificatesFromReaderAt(&chunkedReaderAt{data: certData, maxChunk: 16, eofOnLast: true})
+	if err != nil {
+		t.Fatalf("CertificatesFromReaderAt: %v", err)
+	}
+	if !reflect.DeepEqual(gotCerts, wantCerts) {
+		t.Fatalf("CertificatesFromReaderAt != Certificates")
+	}
+}
