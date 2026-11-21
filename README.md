@@ -22,7 +22,10 @@ versioning and publishing plans.
 
 The library doesn't parse external PDB symbol files or resolve bound import
 addresses. It doesn't support standalone Common Object File Format (COFF)
-objects, ROM images, loaded-memory images, memory-mapped input, or `io.ReaderAt`.
+objects, ROM images, loaded-memory images, or memory-mapped input. For large
+files, use `NewFromReaderAt`, `File.ImportsFromReaderAt`,
+`File.ExportsFromReaderAt`, and `File.CertificatesFromReaderAt` to read bounded
+headers and directories from an `io.ReaderAt` without loading the entire image.
 
 ## Install the library
 

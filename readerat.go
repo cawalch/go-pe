@@ -272,6 +272,64 @@ func (f *File) ImportsFromReaderAt(r io.ReaderAt) ([]ImportLibrary, error) {
 	})
 }
 
+// ExportsFromReaderAt reads the standard export directory from r using f's
+// headers, without requiring the full image in memory. It enforces the same
+// export limits and error semantics as [File.Exports] while bounding I/O with
+// [MaxReaderAtReads] and [MaxReaderAtDirectoryBytes].
+//
+// Results own their strings and slices and retain no reference to r.
+func (f *File) ExportsFromReaderAt(r io.ReaderAt) (*ExportDirectory, error) {
+	if r == nil {
+		return nil, fmt.Errorf("%w: nil ReaderAt", ErrInvalidHeader)
+	}
+	dir, ok, err := f.dataDirectory(DataDirectoryExport, ErrInvalidExport)
+	if err != nil || !ok {
+		return nil, err
+	}
+	if dir.Size < 40 {
+		return nil, fmt.Errorf("%w: incomplete directory", ErrInvalidExport)
+	}
+	cache := readerAtSpanCache{
+		file: f,
+		budget: readerAtBudget{
+			r:        r,
+			size:     f.fileSize,
+			maxReads: MaxReaderAtReads,
+			maxBytes: MaxReaderAtDirectoryBytes,
+		},
+	}
+	return f.parseExports(dir, exportParser{
+		file:        f,
+		spanFn:      cache.span,
+		stringBytes: MaxExportStringBytes,
+	})
+}
+
+// CertificatesFromReaderAt enumerates WIN_CERTIFICATE records in the security
+// data directory from r without requiring the full image in memory. It enforces
+// the same bounds and limits as [File.Certificates] while bounding I/O with
+// [MaxReaderAtReads] and [MaxCertificateBytes].
+func (f *File) CertificatesFromReaderAt(r io.ReaderAt) ([]CertificateRecord, error) {
+	if r == nil {
+		return nil, fmt.Errorf("%w: nil ReaderAt", ErrInvalidHeader)
+	}
+	dirStart, dirEnd, ok, err := certificateDirectoryBoundsFromSize(f, f.FileSize())
+	if err != nil || !ok {
+		return nil, err
+	}
+	b := readerAtBudget{
+		r:        r,
+		size:     f.FileSize(),
+		maxReads: MaxReaderAtReads,
+		maxBytes: MaxCertificateBytes,
+	}
+	dirBytes := make([]byte, dirEnd-dirStart)
+	if err := b.readExact(dirBytes, int64(dirStart)); err != nil {
+		return nil, err
+	}
+	return parseCertificateRecords(dirBytes, dirStart)
+}
+
 type cachedSpan struct {
 	offset int64
 	data   []byte

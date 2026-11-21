@@ -80,7 +80,11 @@ func (f *File) Certificates(data []byte) ([]CertificateRecord, error) {
 	if err != nil || !ok {
 		return nil, err
 	}
+	return parseCertificateRecords(data[dirStart:dirEnd], dirStart)
+}
 
+func parseCertificateRecords(dirBytes []byte, dirStart uint64) ([]CertificateRecord, error) {
+	dirEnd := dirStart + uint64(len(dirBytes))
 	var records []CertificateRecord
 	cursor := dirStart
 	for cursor < dirEnd {
@@ -91,7 +95,8 @@ func (f *File) Certificates(data []byte) ([]CertificateRecord, error) {
 			return nil, fmt.Errorf("%w: truncated certificate header at offset %#x", ErrInvalidCertificate, cursor)
 		}
 
-		hdr := data[cursor : cursor+certificateHeaderSize]
+		rel := cursor - dirStart
+		hdr := dirBytes[rel : rel+certificateHeaderSize]
 		length := binary.LittleEndian.Uint32(hdr[0:4])
 		revision := binary.LittleEndian.Uint16(hdr[4:6])
 		certType := binary.LittleEndian.Uint16(hdr[6:8])
@@ -110,7 +115,7 @@ func (f *File) Certificates(data []byte) ([]CertificateRecord, error) {
 			return nil, fmt.Errorf("%w: certificate alignment padding at offset %#x extends past security directory", ErrInvalidCertificate, cursor)
 		}
 		paddingNonZero := false
-		for _, b := range data[recEnd:next] {
+		for _, b := range dirBytes[recEnd-dirStart : next-dirStart] {
 			if b != 0 {
 				paddingNonZero = true
 				break
@@ -177,6 +182,10 @@ func (f *File) CertificatePayload(data []byte, record CertificateRecord) ([]byte
 }
 
 func certificateDirectoryBounds(f *File, data []byte) (dirStart, dirEnd uint64, ok bool, err error) {
+	return certificateDirectoryBoundsFromSize(f, int64(len(data)))
+}
+
+func certificateDirectoryBoundsFromSize(f *File, dataLen int64) (dirStart, dirEnd uint64, ok bool, err error) {
 	dir, hasDir, err := f.dataDirectory(DataDirectoryCertificate, ErrInvalidCertificate)
 	if err != nil || !hasDir {
 		return 0, 0, false, err
@@ -192,7 +201,7 @@ func certificateDirectoryBounds(f *File, data []byte) (dirStart, dirEnd uint64, 
 	}
 
 	dirEnd = dirStart + dirSize
-	limit := min(f.fileSize, int64(len(data)))
+	limit := min(f.fileSize, dataLen)
 	if limit < 0 || dirEnd > uint64(limit) {
 		return 0, 0, false, fmt.Errorf("%w: security directory [%#x, %#x) exceeds file size %d", ErrOutOfBounds, dirStart, dirEnd, limit)
 	}

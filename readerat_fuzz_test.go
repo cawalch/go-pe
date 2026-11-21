@@ -55,6 +55,24 @@ func FuzzNewFromReaderAt(f *testing.F) {
 			if wantImpErr == nil && gotImpErr == nil && !reflect.DeepEqual(gotImps, wantImps) {
 				t.Fatalf("ImportsFromReaderAt != Imports")
 			}
+
+			wantExps, wantExpErr := byteFile.Exports(data)
+			gotExps, gotExpErr := directFile.ExportsFromReaderAt(&chunkedReaderAt{
+				data:     data,
+				maxChunk: maxChunk,
+			})
+			if wantExpErr == nil && gotExpErr == nil && !reflect.DeepEqual(gotExps, wantExps) {
+				t.Fatalf("ExportsFromReaderAt != Exports")
+			}
+
+			wantCerts, wantCertErr := byteFile.Certificates(data)
+			gotCerts, gotCertErr := directFile.CertificatesFromReaderAt(&chunkedReaderAt{
+				data:     data,
+				maxChunk: maxChunk,
+			})
+			if wantCertErr == nil && gotCertErr == nil && !reflect.DeepEqual(gotCerts, wantCerts) {
+				t.Fatalf("CertificatesFromReaderAt != Certificates")
+			}
 		}
 	})
 }

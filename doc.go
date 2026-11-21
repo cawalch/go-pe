@@ -2,8 +2,11 @@
 // exports, and attribute certificate records.
 // It supports the PE32 and PE32+ formats and uses only the Go standard library.
 //
-// Use [New] to parse a byte slice or [Open] to read a file, or [NewWithLength]
-// to parse a leading stream prefix with a known total stream length. These
+// Use [New] to parse a byte slice, [Open] to read a file, [NewWithLength]
+// to parse a leading stream prefix with a known total stream length, or
+// [NewFromReaderAt] (with [File.ImportsFromReaderAt], [File.ExportsFromReaderAt],
+// and [File.CertificatesFromReaderAt]) to read bounded headers and directories
+// from an [io.ReaderAt] without loading large files into memory. These
 // functions return a metadata snapshot that retains no reference to the input.
 // They require complete headers but don't validate section bodies or data
 // directory contents; inspect [File.FileSize], [File.DeclaredExtent], and

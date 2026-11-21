@@ -73,8 +73,11 @@ func (f *File) Exports(data []byte) (*ExportDirectory, error) {
 	if dir.Size < 40 {
 		return nil, fmt.Errorf("%w: incomplete directory", ErrInvalidExport)
 	}
+	return f.parseExports(dir, exportParser{file: f, data: data, stringBytes: MaxExportStringBytes})
+}
+
+func (f *File) parseExports(dir DataDirectory, p exportParser) (*ExportDirectory, error) {
 	end := uint64(dir.VirtualAddress) + uint64(dir.Size)
-	p := exportParser{file: f, data: data, stringBytes: MaxExportStringBytes}
 	header, err := p.table(dir.VirtualAddress, 40)
 	if err != nil {
 		return nil, err
@@ -160,7 +163,15 @@ func (f *File) Exports(data []byte) (*ExportDirectory, error) {
 type exportParser struct {
 	file        *File
 	data        []byte
+	spanFn      func(uint32) ([]byte, error)
 	stringBytes int
+}
+
+func (p *exportParser) span(rva uint32) ([]byte, error) {
+	if p.spanFn != nil {
+		return p.spanFn(rva)
+	}
+	return p.file.rvaSpan(p.data, rva)
 }
 
 func (p *exportParser) table(rva uint32, size uint64) ([]byte, error) {
@@ -170,7 +181,7 @@ func (p *exportParser) table(rva uint32, size uint64) ([]byte, error) {
 	if rva == 0 {
 		return nil, fmt.Errorf("%w: missing table RVA", ErrInvalidExport)
 	}
-	b, err := p.file.rvaSpan(p.data, rva)
+	b, err := p.span(rva)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +195,7 @@ func (p *exportParser) name(rva uint32, end uint64) (string, error) {
 	if rva == 0 || uint64(rva) >= end {
 		return "", fmt.Errorf("%w: invalid string RVA", ErrInvalidExport)
 	}
-	b, err := p.file.rvaSpan(p.data, rva)
+	b, err := p.span(rva)
 	if err != nil {
 		return "", err
 	}
