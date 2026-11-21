@@ -44,6 +44,9 @@ var (
 	oidECDSAWithSHA384 = asn1.ObjectIdentifier{1, 2, 840, 10045, 4, 3, 3}
 	oidECDSAWithSHA512 = asn1.ObjectIdentifier{1, 2, 840, 10045, 4, 3, 4}
 	oidEd25519         = asn1.ObjectIdentifier{1, 3, 101, 112}
+
+	oidSigningCertificate   = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 9, 16, 2, 12}
+	oidSigningCertificateV2 = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 9, 16, 2, 47}
 )
 
 // AuthenticodeVerificationStatus identifies the outcome of an individual
@@ -902,7 +905,7 @@ func verifySignerCMS(
 
 	var signedData []byte
 	if hasSignedAttrs {
-		if status, reason := validateSignedAttributes(signer.AuthenticatedAttributes, expectedContentType, allowMissingContentType, contentPayload, digestAlg); status != AuthenticodeStatusValid {
+		if status, reason := validateSignedAttributes(signer.AuthenticatedAttributes, expectedContentType, allowMissingContentType, contentPayload, digestAlg, signerCert, binding.Status); status != AuthenticodeStatusValid {
 			return AuthenticodeCMSVerification{
 				Status:          status,
 				DigestAlgorithm: digestAlg,
@@ -970,12 +973,35 @@ func verifySignerCMS(
 	}
 }
 
+type rawESSCertID struct {
+	CertHash     []byte
+	IssuerSerial asn1.RawValue `asn1:"optional"`
+}
+
+type rawSigningCertificate struct {
+	Certs    []rawESSCertID
+	Policies asn1.RawValue `asn1:"optional"`
+}
+
+type rawESSCertIDv2 struct {
+	HashAlgorithm pkix.AlgorithmIdentifier `asn1:"optional"`
+	CertHash      []byte
+	IssuerSerial  asn1.RawValue `asn1:"optional"`
+}
+
+type rawSigningCertificateV2 struct {
+	Certs    []rawESSCertIDv2
+	Policies asn1.RawValue `asn1:"optional"`
+}
+
 func validateSignedAttributes(
 	attrs []AuthenticodeAttribute,
 	expectedContentType asn1.ObjectIdentifier,
 	allowMissingContentType bool,
 	contentPayload []byte,
 	digestAlg crypto.Hash,
+	signerCert *x509.Certificate,
+	bindingStatus AuthenticodeVerificationStatus,
 ) (AuthenticodeVerificationStatus, string) {
 	seen := make(map[string]struct{}, len(attrs))
 	var hasContentType bool
@@ -1029,6 +1055,16 @@ func validateSignedAttributes(
 			if len(attr.Values) > 1 {
 				return AuthenticodeStatusInvalid, "SpcSpOpusInfo attribute must have at most one value"
 			}
+
+		case attr.Type.Equal(oidSigningCertificate):
+			if status, reason := validateSigningCertificateAttr(attr, signerCert, bindingStatus); status != AuthenticodeStatusValid {
+				return status, reason
+			}
+
+		case attr.Type.Equal(oidSigningCertificateV2):
+			if status, reason := validateSigningCertificateV2Attr(attr, signerCert, bindingStatus); status != AuthenticodeStatusValid {
+				return status, reason
+			}
 		}
 	}
 
@@ -1046,6 +1082,50 @@ func validateSignedAttributes(
 	computed := computeHash(digestAlg, contentPayload)
 	if subtle.ConstantTimeCompare(gotDigest, computed) != 1 {
 		return AuthenticodeStatusInvalid, "signed messageDigest does not match encapsulated content digest"
+	}
+	return AuthenticodeStatusValid, ""
+}
+
+func validateSigningCertificateAttr(attr AuthenticodeAttribute, signerCert *x509.Certificate, bindingStatus AuthenticodeVerificationStatus) (AuthenticodeVerificationStatus, string) {
+	if len(attr.Values) != 1 {
+		return AuthenticodeStatusInvalid, "signingCertificate attribute must have one value"
+	}
+	var sc rawSigningCertificate
+	rest, err := asn1.Unmarshal(attr.Values[0], &sc)
+	if err != nil || len(rest) != 0 || len(sc.Certs) == 0 {
+		return AuthenticodeStatusInvalid, "malformed signingCertificate signed attribute"
+	}
+	if bindingStatus == AuthenticodeStatusValid && signerCert != nil {
+		want := computeHash(crypto.SHA1, signerCert.Raw)
+		if subtle.ConstantTimeCompare(sc.Certs[0].CertHash, want) != 1 {
+			return AuthenticodeStatusInvalid, "signingCertificate hash does not match signer certificate"
+		}
+	}
+	return AuthenticodeStatusValid, ""
+}
+
+func validateSigningCertificateV2Attr(attr AuthenticodeAttribute, signerCert *x509.Certificate, bindingStatus AuthenticodeVerificationStatus) (AuthenticodeVerificationStatus, string) {
+	if len(attr.Values) != 1 {
+		return AuthenticodeStatusInvalid, "signingCertificateV2 attribute must have one value"
+	}
+	var sc rawSigningCertificateV2
+	rest, err := asn1.Unmarshal(attr.Values[0], &sc)
+	if err != nil || len(rest) != 0 || len(sc.Certs) == 0 {
+		return AuthenticodeStatusInvalid, "malformed signingCertificateV2 signed attribute"
+	}
+	alg := crypto.SHA256
+	if len(sc.Certs[0].HashAlgorithm.Algorithm) > 0 {
+		var ok bool
+		alg, ok = digestAlgorithmFromOID(sc.Certs[0].HashAlgorithm.Algorithm)
+		if !ok {
+			return AuthenticodeStatusUnsupported, fmt.Sprintf("unsupported signingCertificateV2 hash algorithm %s", sc.Certs[0].HashAlgorithm.Algorithm)
+		}
+	}
+	if bindingStatus == AuthenticodeStatusValid && signerCert != nil {
+		want := computeHash(alg, signerCert.Raw)
+		if subtle.ConstantTimeCompare(sc.Certs[0].CertHash, want) != 1 {
+			return AuthenticodeStatusInvalid, "signingCertificateV2 hash does not match signer certificate"
+		}
 	}
 	return AuthenticodeStatusValid, ""
 }
