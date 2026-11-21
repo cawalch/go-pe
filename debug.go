@@ -164,27 +164,12 @@ type DebugEntry struct {
 // without decoding payloads. Unknown CodeView signatures in [DebugTypeCodeView]
 // entries still validate pointer/size bounds and leave CodeView nil.
 func (f *File) Debug(data []byte) ([]DebugEntry, error) {
-	if f == nil || (!f.Is32Bit() && !f.Is64Bit()) {
-		return nil, ErrInvalidHeader
-	}
-	if f.OptionalHeader.NumberOfRvaAndSizes <= DataDirectoryDebug {
-		return nil, nil
-	}
-	dir := f.OptionalHeader.DataDirectories[DataDirectoryDebug]
-	if dir.VirtualAddress == 0 && dir.Size == 0 {
-		return nil, nil
-	}
-	if dir.VirtualAddress == 0 || dir.Size == 0 {
-		return nil, fmt.Errorf("%w: incomplete directory descriptor", ErrInvalidDebug)
+	dir, ok, err := f.dataDirectory(DataDirectoryDebug, ErrInvalidDebug)
+	if err != nil || !ok {
+		return nil, err
 	}
 	if dir.Size%debugDirectoryEntrySize != 0 {
 		return nil, fmt.Errorf("%w: misaligned directory size %d", ErrInvalidDebug, dir.Size)
-	}
-	if uint64(dir.VirtualAddress)+uint64(dir.Size) > 1<<32 {
-		return nil, ErrIntegerOverflow
-	}
-	if len(f.Sections) > MaxSections {
-		return nil, ErrSectionLimit
 	}
 	count := dir.Size / debugDirectoryEntrySize
 	if count > MaxDebugEntries {

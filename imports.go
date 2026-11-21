@@ -66,24 +66,9 @@ type ImportSymbol struct {
 // import address table only when the descriptor's timestamp is zero (unbound).
 // It doesn't decode bound addresses, delayed imports, or loaded-memory images.
 func (f *File) Imports(data []byte) ([]ImportLibrary, error) {
-	if f == nil || (!f.Is32Bit() && !f.Is64Bit()) {
-		return nil, ErrInvalidHeader
-	}
-	if f.OptionalHeader.NumberOfRvaAndSizes <= DataDirectoryImport {
-		return nil, nil
-	}
-	dir := f.OptionalHeader.DataDirectories[DataDirectoryImport]
-	if dir.VirtualAddress == 0 && dir.Size == 0 {
-		return nil, nil
-	}
-	if dir.VirtualAddress == 0 || dir.Size == 0 {
-		return nil, fmt.Errorf("%w: incomplete directory descriptor", ErrInvalidImport)
-	}
-	if uint64(dir.VirtualAddress)+uint64(dir.Size) > uint64(math.MaxUint32)+1 {
-		return nil, ErrIntegerOverflow
-	}
-	if len(f.Sections) > MaxSections {
-		return nil, ErrSectionLimit
+	dir, ok, err := f.dataDirectory(DataDirectoryImport, ErrInvalidImport)
+	if err != nil || !ok {
+		return nil, err
 	}
 	p := importParser{
 		file:        f,

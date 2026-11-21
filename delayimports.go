@@ -81,24 +81,9 @@ type DelayImportLibrary struct {
 // DelayImports uses ImportNameTableRVA when nonzero; if zero, it falls back to
 // ImportAddressTableRVA only when TimeDateStamp is zero (unbound).
 func (f *File) DelayImports(data []byte) ([]DelayImportLibrary, error) {
-	if f == nil || (!f.Is32Bit() && !f.Is64Bit()) {
-		return nil, ErrInvalidHeader
-	}
-	if f.OptionalHeader.NumberOfRvaAndSizes <= DataDirectoryDelayImport {
-		return nil, nil
-	}
-	dir := f.OptionalHeader.DataDirectories[DataDirectoryDelayImport]
-	if dir.VirtualAddress == 0 && dir.Size == 0 {
-		return nil, nil
-	}
-	if dir.VirtualAddress == 0 || dir.Size == 0 {
-		return nil, fmt.Errorf("%w: incomplete directory descriptor", ErrInvalidDelayImport)
-	}
-	if uint64(dir.VirtualAddress)+uint64(dir.Size) > 1<<32 {
-		return nil, ErrIntegerOverflow
-	}
-	if len(f.Sections) > MaxSections {
-		return nil, ErrSectionLimit
+	dir, ok, err := f.dataDirectory(DataDirectoryDelayImport, ErrInvalidDelayImport)
+	if err != nil || !ok {
+		return nil, err
 	}
 
 	p := importParser{

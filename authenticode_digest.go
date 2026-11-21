@@ -142,11 +142,8 @@ func newAuthenticodeHasher(alg crypto.Hash) (hash.Hash, error) {
 }
 
 func buildAuthenticodeDigestPlan(f *File, data []byte) (authenticodeDigestPlan, error) {
-	if f == nil || (!f.Is32Bit() && !f.Is64Bit()) {
-		return authenticodeDigestPlan{}, fmt.Errorf("%w: file headers not parsed", ErrInvalidHeader)
-	}
-	if len(f.Sections) > MaxSections {
-		return authenticodeDigestPlan{}, fmt.Errorf("%w: %d exceeds %d", ErrSectionLimit, len(f.Sections), MaxSections)
+	if err := f.validateParsedHeaders(); err != nil {
+		return authenticodeDigestPlan{}, err
 	}
 	if f.fileSize < 0 || int64(len(data)) != f.fileSize {
 		return authenticodeDigestPlan{}, fmt.Errorf("%w: input size %d does not match parsed file size %d", ErrOutOfBounds, len(data), f.fileSize)
