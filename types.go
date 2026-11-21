@@ -64,8 +64,24 @@ const (
 	MachineEBC       = 0xebc
 	MachineAMD64     = 0x8664
 	MachineM32R      = 0x9041
+	MachineARM64EC   = 0xa641
 	MachineARM64     = 0xaa64
 	MachineCEE       = 0xc0ee
+)
+
+// Optional header DLL characteristics (IMAGE_DLLCHARACTERISTICS_*).
+const (
+	DllCharacteristicsHighEntropyVA       = 0x0020
+	DllCharacteristicsDynamicBase         = 0x0040
+	DllCharacteristicsForceIntegrity      = 0x0080
+	DllCharacteristicsNXCompat            = 0x0100
+	DllCharacteristicsNoIsolation         = 0x0200
+	DllCharacteristicsNoSEH               = 0x0400
+	DllCharacteristicsNoBind              = 0x0800
+	DllCharacteristicsAppContainer        = 0x1000
+	DllCharacteristicsWDMDriver           = 0x2000
+	DllCharacteristicsGuardCF             = 0x4000
+	DllCharacteristicsTerminalServerAware = 0x8000
 )
 
 // Subsystems.
