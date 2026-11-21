@@ -1,9 +1,14 @@
 package pe
 
 import (
+	"bytes"
 	"fmt"
+	"math"
 	"os"
 )
+
+// MaxOverlayBytes limits the maximum trailing overlay slice copied by [File.Overlay].
+const MaxOverlayBytes = MaxAuthenticodeDigestBytes
 
 // File contains a snapshot of a PE image's headers and sections.
 // If you don't modify its exported fields, you can read a File concurrently.
@@ -157,6 +162,37 @@ func (f *File) DeclaredExtent() (uint64, bool) {
 func (f *File) InputTruncated() bool {
 	extent, ok := f.DeclaredExtent()
 	return ok && (f.fileSize < 0 || extent > uint64(f.fileSize))
+}
+
+// OverlayOffset returns the starting file byte offset of trailing overlay
+// data beyond [File.DeclaredExtent], or (0, false) when f is nil, has invalid
+// headers, is truncated, or has no trailing bytes.
+func (f *File) OverlayOffset() (int64, bool) {
+	extent, ok := f.DeclaredExtent()
+	if !ok || f.fileSize < 0 || extent > math.MaxInt64 || int64(extent) >= f.fileSize {
+		return 0, false
+	}
+	return int64(extent), true
+}
+
+// Overlay returns a newly allocated copy of trailing bytes after
+// [File.DeclaredExtent], or (nil, false, nil) when no overlay is present.
+// Pass the complete byte slice used with [New].
+func (f *File) Overlay(data []byte) ([]byte, bool, error) {
+	if f == nil || (!f.Is32Bit() && !f.Is64Bit()) {
+		return nil, false, fmt.Errorf("%w: file headers not parsed", ErrInvalidHeader)
+	}
+	if f.fileSize < 0 || int64(len(data)) != f.fileSize {
+		return nil, false, fmt.Errorf("%w: input size %d does not match parsed file size %d", ErrOutOfBounds, len(data), f.fileSize)
+	}
+	offset, ok := f.OverlayOffset()
+	if !ok {
+		return nil, false, nil
+	}
+	if int64(len(data))-offset > MaxOverlayBytes {
+		return nil, false, fmt.Errorf("%w: overlay size %d exceeds %d", ErrOutOfBounds, int64(len(data))-offset, MaxOverlayBytes)
+	}
+	return bytes.Clone(data[offset:]), true, nil
 }
 
 // IsDLL reports whether the COFF characteristics mark the image as a
