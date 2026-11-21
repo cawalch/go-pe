@@ -80,9 +80,10 @@ const (
 // Parsing metadata doesn't verify cryptographic signatures, message digests, or
 // certificate trust chains.
 type AuthenticodeSignature struct {
-	RecordOffset     uint32
-	NestedDepth      int
-	Version          int
+	RecordOffset         uint32
+	NestedDepth          int
+	TrailingPaddingBytes int
+	Version              int
 	ContentType      asn1.ObjectIdentifier
 	DigestAlgorithms []pkix.AlgorithmIdentifier
 	IndirectData     *AuthenticodeIndirectData
@@ -194,11 +195,11 @@ func (f *File) AuthenticodeSignatures(data []byte) ([]AuthenticodeSignature, err
 		if err != nil {
 			return nil, err
 		}
-		der, err := berToDER(payload)
+		der, trailing, err := berToDERWithTrailing(payload)
 		if err != nil {
 			return nil, err
 		}
-		if err := parseSignedDataRecursive(der, rec.Offset, 0, &budget, &out); err != nil {
+		if err := parseSignedDataRecursive(der, rec.Offset, 0, trailing, &budget, &out); err != nil {
 			return nil, err
 		}
 	}
@@ -212,13 +213,13 @@ func (f *File) AuthenticodeSignatures(data []byte) ([]AuthenticodeSignature, err
 // clear rawPKCS7 after this call returns. Parsing metadata doesn't verify
 // signatures or trust chains.
 func ParseAuthenticodeSignatures(rawPKCS7 []byte) ([]AuthenticodeSignature, error) {
-	der, err := berToDER(rawPKCS7)
+	der, trailing, err := berToDERWithTrailing(rawPKCS7)
 	if err != nil {
 		return nil, err
 	}
 	var out []AuthenticodeSignature
 	var budget authParseBudget
-	if err := parseSignedDataRecursive(der, 0, 0, &budget, &out); err != nil {
+	if err := parseSignedDataRecursive(der, 0, 0, trailing, &budget, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -338,7 +339,7 @@ type rawTSTInfo struct {
 	Extensions     asn1.RawValue  `asn1:"optional,tag:1"`
 }
 
-func parseSignedDataRecursive(der []byte, recordOffset uint32, nestedDepth int, budget *authParseBudget, out *[]AuthenticodeSignature) error {
+func parseSignedDataRecursive(der []byte, recordOffset uint32, nestedDepth int, trailingPadding int, budget *authParseBudget, out *[]AuthenticodeSignature) error {
 	if nestedDepth > MaxNestedSignatures {
 		return fmt.Errorf("%w: nested signature depth exceeds %d", ErrAuthenticodeLimit, MaxNestedSignatures)
 	}
@@ -351,14 +352,15 @@ func parseSignedDataRecursive(der []byte, recordOffset uint32, nestedDepth int, 
 	if err != nil {
 		return err
 	}
+	sig.TrailingPaddingBytes = trailingPadding
 	*out = append(*out, sig)
 
 	for _, blob := range nestedBlobs {
-		nestedDER, err := berToDER(blob)
+		nestedDER, nestedTrailing, err := berToDERWithTrailing(blob)
 		if err != nil {
 			return err
 		}
-		if err := parseSignedDataRecursive(nestedDER, recordOffset, nestedDepth+1, budget, out); err != nil {
+		if err := parseSignedDataRecursive(nestedDER, recordOffset, nestedDepth+1, nestedTrailing, budget, out); err != nil {
 			return err
 		}
 	}

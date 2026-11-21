@@ -55,10 +55,11 @@ const certificateHeaderSize = 8
 // Enumerating records validates record framing and directory bounds, and doesn't
 // verify Authenticode signatures or decode embedded payloads.
 type CertificateRecord struct {
-	Offset   uint32
-	Length   uint32
-	Revision uint16
-	Type     uint16
+	Offset         uint32
+	Length         uint32
+	Revision       uint16
+	Type           uint16
+	PaddingNonZero bool
 }
 
 // Certificates enumerates the WIN_CERTIFICATE records in the security data
@@ -108,12 +109,20 @@ func (f *File) Certificates(data []byte) ([]CertificateRecord, error) {
 		if next > dirEnd {
 			return nil, fmt.Errorf("%w: certificate alignment padding at offset %#x extends past security directory", ErrInvalidCertificate, cursor)
 		}
+		paddingNonZero := false
+		for _, b := range data[recEnd:next] {
+			if b != 0 {
+				paddingNonZero = true
+				break
+			}
+		}
 
 		records = append(records, CertificateRecord{
-			Offset:   uint32(cursor),
-			Length:   length,
-			Revision: revision,
-			Type:     certType,
+			Offset:         uint32(cursor),
+			Length:         length,
+			Revision:       revision,
+			Type:           certType,
+			PaddingNonZero: paddingNonZero,
 		})
 		cursor = next
 	}

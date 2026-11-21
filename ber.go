@@ -23,28 +23,33 @@ type berState struct {
 // unbounded nesting, element count floods, primitive indefinite lengths, and
 // child extents exceeding their parent container.
 func berToDER(input []byte) ([]byte, error) {
+	der, _, err := berToDERWithTrailing(input)
+	return der, err
+}
+
+func berToDERWithTrailing(input []byte) ([]byte, int, error) {
 	if len(input) == 0 {
-		return nil, fmt.Errorf("%w: empty ASN.1 input", ErrInvalidAuthenticode)
+		return nil, 0, fmt.Errorf("%w: empty ASN.1 input", ErrInvalidAuthenticode)
 	}
 	if len(input) > MaxCertificateBytes {
-		return nil, fmt.Errorf("%w: ASN.1 input size %d exceeds %d", ErrAuthenticodeLimit, len(input), MaxCertificateBytes)
+		return nil, 0, fmt.Errorf("%w: ASN.1 input size %d exceeds %d", ErrAuthenticodeLimit, len(input), MaxCertificateBytes)
 	}
 
 	var st berState
 	end, derLen, err := measureBERElement(input, 0, len(input), 1, &st)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	for i := end; i < len(input); i++ {
 		if input[i] != 0 {
-			return nil, fmt.Errorf("%w: trailing non-zero data at offset %d", ErrInvalidAuthenticode, i)
+			return nil, 0, fmt.Errorf("%w: trailing non-zero data at offset %d", ErrInvalidAuthenticode, i)
 		}
 	}
 
 	out := make([]byte, 0, derLen)
 	lenIdx := 0
 	emitBERElement(input, 0, st.lengths, &lenIdx, &out)
-	return out, nil
+	return out, len(input) - end, nil
 }
 
 func measureBERElement(src []byte, offset, parentEnd, depth int, st *berState) (nextOffset int, derSize int, err error) {
