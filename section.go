@@ -105,9 +105,9 @@ func parseSectionName(raw []byte, r *SafeReader, stringTableOffset int64) (strin
 	}
 
 	// An ordinary name occupies eight bytes and may end with NUL padding.
-	idx := bytes.IndexByte(raw, 0)
-	if idx >= 0 {
-		return string(raw[:idx]), nil
+	before, _, ok := bytes.Cut(raw, []byte{0})
+	if ok {
+		return string(before), nil
 	}
 	return string(raw), nil
 }
