@@ -20,6 +20,9 @@ const (
 	MaxReaderAtReads = 1024
 	// MaxReaderAtBytes limits total bytes read per [NewFromReaderAt] call.
 	MaxReaderAtBytes = 2 << 20
+	// MaxReaderAtDirectoryBytes limits total bytes read per directory
+	// ReaderAt call (such as [File.ImportsFromReaderAt]).
+	MaxReaderAtDirectoryBytes = 16 << 20
 )
 
 // ErrReaderAtLimit indicates that [NewFromReaderAt] exceeded a read-count or
@@ -233,4 +236,112 @@ func parseSectionsFromReaderAt(table []byte, count uint16, stringTableOffset int
 		}
 	}
 	return sections, nil
+}
+
+// ImportsFromReaderAt reads the standard import directory from r using f's
+// headers, without requiring the full image in memory. It enforces the same
+// import limits and error semantics as [File.Imports] while bounding I/O with
+// [MaxReaderAtReads] and [MaxReaderAtDirectoryBytes].
+//
+// Results own their strings and slices and retain no reference to r.
+func (f *File) ImportsFromReaderAt(r io.ReaderAt) ([]ImportLibrary, error) {
+	if r == nil {
+		return nil, fmt.Errorf("%w: nil ReaderAt", ErrInvalidHeader)
+	}
+	dir, ok, err := f.dataDirectory(DataDirectoryImport, ErrInvalidImport)
+	if err != nil || !ok {
+		return nil, err
+	}
+	cache := readerAtSpanCache{
+		file: f,
+		budget: readerAtBudget{
+			r:        r,
+			size:     f.fileSize,
+			maxReads: MaxReaderAtReads,
+			maxBytes: MaxReaderAtDirectoryBytes,
+		},
+	}
+	return f.parseImports(dir, importParser{
+		file:        f,
+		spanFn:      cache.span,
+		stringBytes: MaxImportStringBytes,
+		maxName:     MaxImportNameBytes,
+		maxSymbols:  MaxImportSymbols,
+		invalidErr:  ErrInvalidImport,
+		limitErr:    ErrImportLimit,
+	})
+}
+
+type cachedSpan struct {
+	offset int64
+	data   []byte
+}
+
+type readerAtSpanCache struct {
+	file   *File
+	budget readerAtBudget
+	spans  []cachedSpan
+}
+
+func (c *readerAtSpanCache) span(rva uint32) ([]byte, error) {
+	fileEnd := min(c.file.fileSize, 1<<32)
+	offset, limit, ok := c.file.rvaRange(rva, fileEnd)
+	if !ok {
+		return nil, ErrOutOfBounds
+	}
+
+	for _, s := range c.spans {
+		sEnd := s.offset + int64(len(s.data))
+		if offset >= s.offset && offset+limit <= sEnd {
+			return s.data[offset-s.offset : offset-s.offset+limit], nil
+		}
+	}
+
+	readStart, readEnd := c.enclosingRange(rva, offset, limit, fileEnd)
+	remaining := c.budget.maxBytes - c.budget.bytes
+	if readEnd-readStart > remaining {
+		// Fall back to reading only the requested span from offset if the full
+		// enclosing section exceeds the remaining directory byte budget.
+		readStart = offset
+		readEnd = min(offset+limit, offset+remaining)
+	}
+	readLen := readEnd - readStart
+	if readLen <= 0 {
+		return nil, fmt.Errorf("%w: read bytes exceed %d", ErrReaderAtLimit, c.budget.maxBytes)
+	}
+
+	buf := make([]byte, readLen)
+	if err := c.budget.readExact(buf, readStart); err != nil {
+		return nil, err
+	}
+	c.spans = append(c.spans, cachedSpan{offset: readStart, data: buf})
+
+	avail := min(limit, readEnd-offset)
+	return buf[offset-readStart : offset-readStart+avail], nil
+}
+
+func (c *readerAtSpanCache) enclosingRange(rva uint32, offset, limit, fileEnd int64) (int64, int64) {
+	if rva < c.file.OptionalHeader.SizeOfHeaders {
+		end := min(int64(c.file.OptionalHeader.SizeOfHeaders), fileEnd)
+		if end > offset {
+			return 0, end
+		}
+		return offset, offset + limit
+	}
+	for i := range c.file.Sections {
+		s := &c.file.Sections[i]
+		if rva < s.VirtualAddress {
+			continue
+		}
+		delta := uint64(rva) - uint64(s.VirtualAddress)
+		if delta < uint64(max(s.VirtualSize, s.SizeOfRawData)) {
+			start := int64(s.PointerToRawData)
+			end := min(start+int64(s.SizeOfRawData), fileEnd)
+			if start <= offset && end >= offset+limit {
+				return start, end
+			}
+			break
+		}
+	}
+	return offset, offset + limit
 }

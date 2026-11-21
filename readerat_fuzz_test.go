@@ -46,6 +46,15 @@ func FuzzNewFromReaderAt(f *testing.F) {
 			if !reflect.DeepEqual(directFile, byteFile) {
 				t.Fatalf("NewFromReaderAt(bytes.Reader) != New")
 			}
+
+			wantImps, wantImpErr := byteFile.Imports(data)
+			gotImps, gotImpErr := directFile.ImportsFromReaderAt(&chunkedReaderAt{
+				data:     data,
+				maxChunk: maxChunk,
+			})
+			if wantImpErr == nil && gotImpErr == nil && !reflect.DeepEqual(gotImps, wantImps) {
+				t.Fatalf("ImportsFromReaderAt != Imports")
+			}
 		}
 	})
 }

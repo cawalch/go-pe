@@ -70,7 +70,7 @@ func (f *File) Imports(data []byte) ([]ImportLibrary, error) {
 	if err != nil || !ok {
 		return nil, err
 	}
-	p := importParser{
+	return f.parseImports(dir, importParser{
 		file:        f,
 		data:        data,
 		stringBytes: MaxImportStringBytes,
@@ -78,11 +78,14 @@ func (f *File) Imports(data []byte) ([]ImportLibrary, error) {
 		maxSymbols:  MaxImportSymbols,
 		invalidErr:  ErrInvalidImport,
 		limitErr:    ErrImportLimit,
-	}
+	})
+}
+
+func (f *File) parseImports(dir DataDirectory, p importParser) ([]ImportLibrary, error) {
 	var libraries []ImportLibrary
 	for pos := uint64(0); pos+20 <= uint64(dir.Size); pos += 20 {
 		// The directory extent was checked before the loop, so this RVA fits.
-		b, err := p.file.rvaSpan(p.data, dir.VirtualAddress+uint32(pos))
+		b, err := p.span(dir.VirtualAddress + uint32(pos))
 		if err != nil {
 			return nil, fmt.Errorf("import descriptor %d: %w", len(libraries), err)
 		}
@@ -109,7 +112,7 @@ func (f *File) Imports(data []byte) ([]ImportLibrary, error) {
 		if name == 0 || lookup == 0 {
 			return nil, fmt.Errorf("%w: missing DLL name or lookup table", ErrInvalidImport)
 		}
-		b, err = p.file.rvaSpan(p.data, name)
+		b, err = p.span(name)
 		if err != nil {
 			return nil, fmt.Errorf("import DLL name: %w", err)
 		}
@@ -129,12 +132,20 @@ func (f *File) Imports(data []byte) ([]ImportLibrary, error) {
 type importParser struct {
 	file        *File
 	data        []byte
+	spanFn      func(uint32) ([]byte, error)
 	symbolCount int
 	stringBytes int
 	maxName     int
 	maxSymbols  int
 	invalidErr  error
 	limitErr    error
+}
+
+func (p *importParser) span(rva uint32) ([]byte, error) {
+	if p.spanFn != nil {
+		return p.spanFn(rva)
+	}
+	return p.file.rvaSpan(p.data, rva)
 }
 
 func (p *importParser) name(data []byte) (string, error) {
@@ -157,7 +168,7 @@ func (p *importParser) name(data []byte) (string, error) {
 }
 
 func (p *importParser) symbols(rva, firstThunk uint32, subtractVA bool, vaBase uint64) ([]ImportSymbol, error) {
-	table, err := p.file.rvaSpan(p.data, rva)
+	table, err := p.span(rva)
 	if err != nil {
 		return nil, err
 	}
@@ -202,7 +213,7 @@ func (p *importParser) symbols(rva, firstThunk uint32, subtractVA bool, vaBase u
 			if value > math.MaxInt32 {
 				return nil, fmt.Errorf("%w: reserved name RVA bits", p.invalidErr)
 			}
-			b, err := p.file.rvaSpan(p.data, uint32(value))
+			b, err := p.span(uint32(value))
 			if err != nil {
 				return nil, err
 			}

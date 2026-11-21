@@ -146,3 +146,57 @@ func TestNewFromReaderAtShortReadsErrorsAndLimits(t *testing.T) {
 		t.Fatalf("1-byte chunk read budget err = %v, want ErrReaderAtLimit", err)
 	}
 }
+
+func TestImportsFromReaderAt(t *testing.T) {
+	if _, err := (*pe.File)(nil).ImportsFromReaderAt(bytes.NewReader(nil)); !errors.Is(err, pe.ErrInvalidHeader) {
+		t.Fatalf("nil File ImportsFromReaderAt err = %v, want ErrInvalidHeader", err)
+	}
+	valid, err := pe.New(testfixture.Minimal(true, 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := valid.ImportsFromReaderAt(nil); !errors.Is(err, pe.ErrInvalidHeader) {
+		t.Fatalf("nil ReaderAt err = %v, want ErrInvalidHeader", err)
+	}
+
+	gorootOut, err := exec.Command("go", "env", "GOROOT").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	goroot := strings.TrimSpace(string(gorootOut))
+	files := []string{
+		filepath.Join(goroot, "src", "debug", "pe", "testdata", "gcc-386-mingw-exec"),
+		filepath.Join(goroot, "src", "debug", "pe", "testdata", "gcc-amd64-mingw-exec"),
+		filepath.Join(goroot, "src", "debug", "pe", "testdata", "gcc-386-mingw-no-symbols-exec"),
+		filepath.Join(goroot, "src", "debug", "pe", "testdata", "vmlinuz-4.15.0-47-generic"),
+	}
+
+	for _, path := range files {
+		t.Run(filepath.Base(path), func(t *testing.T) {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			f, err := pe.New(data)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want, err := f.Imports(data)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			rf, err := pe.NewFromReaderAt(bytes.NewReader(data), int64(len(data)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := rf.ImportsFromReaderAt(&chunkedReaderAt{data: data, maxChunk: 64, eofOnLast: true})
+			if err != nil {
+				t.Fatalf("ImportsFromReaderAt: %v", err)
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("ImportsFromReaderAt != Imports")
+			}
+		})
+	}
+}
