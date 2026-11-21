@@ -101,6 +101,10 @@ type AuthenticodeVerifyOptions struct {
 	// certificates embedded in each SignedData certificate set.
 	Intermediates *x509.CertPool
 
+	// CRLs supplies additional offline X.509 certificate revocation lists
+	// evaluated alongside CRLs embedded in SignedData.
+	CRLs []*x509.RevocationList
+
 	// VerificationTime pins the evaluation timestamp for certificate validity
 	// windows and chain verification. When zero, verified in-bounds timestamps
 	// provide the effective evaluation time for signer certificates, or the
@@ -200,6 +204,7 @@ type AuthenticodeSignerVerification struct {
 	SignerValidity    AuthenticodeCheck
 	Timestamps        []AuthenticodeTimestampVerification
 	Trust             AuthenticodeTrustVerification
+	Revocation        AuthenticodeCheck
 }
 
 // AuthenticodeTimestampVerification reports separated verification claims for a
@@ -486,16 +491,22 @@ func verifyAuthenticodeSigner(
 			Status: AuthenticodeStatusUnchecked,
 			Reason: "no trust roots provided",
 		}
-		return out, nil
+	} else {
+		if err := budget.consume("publisher chain"); err != nil {
+			return AuthenticodeSignerVerification{}, err
+		}
+		keyUsages := opts.KeyUsages
+		if len(keyUsages) == 0 {
+			keyUsages = []x509.ExtKeyUsage{x509.ExtKeyUsageCodeSigning}
+		}
+		out.Trust = verifyCertificateTrust(signerCert, binding.Status, opts.Roots, intermediatePool, evalTime, keyUsages)
 	}
-	if err := budget.consume("publisher chain"); err != nil {
+
+	rev, err := checkSignerRevocation(signerCert, binding.Status, sig.Certificates, out.Trust.Chains, sig.CRLs, opts.CRLs, evalTime, budget)
+	if err != nil {
 		return AuthenticodeSignerVerification{}, err
 	}
-	keyUsages := opts.KeyUsages
-	if len(keyUsages) == 0 {
-		keyUsages = []x509.ExtKeyUsage{x509.ExtKeyUsageCodeSigning}
-	}
-	out.Trust = verifyCertificateTrust(signerCert, binding.Status, opts.Roots, intermediatePool, evalTime, keyUsages)
+	out.Revocation = rev
 	return out, nil
 }
 
@@ -1275,6 +1286,104 @@ func verifyCertificateTrust(
 		Status: AuthenticodeStatusValid,
 		Chains: chains,
 	}
+}
+
+func checkSignerRevocation(
+	signerCert *x509.Certificate,
+	bindingStatus AuthenticodeVerificationStatus,
+	embeddedCerts []*x509.Certificate,
+	verifiedChains [][]*x509.Certificate,
+	embeddedCRLs []*x509.RevocationList,
+	optionCRLs []*x509.RevocationList,
+	evalTime time.Time,
+	budget *authVerifyBudget,
+) (AuthenticodeCheck, error) {
+	if len(embeddedCRLs) == 0 && len(optionCRLs) == 0 {
+		return AuthenticodeCheck{
+			Status: AuthenticodeStatusUnchecked,
+			Reason: "no CRLs available",
+		}, nil
+	}
+	if bindingStatus != AuthenticodeStatusValid || signerCert == nil || signerCert.SerialNumber == nil {
+		return AuthenticodeCheck{
+			Status: AuthenticodeStatusInvalid,
+			Reason: "missing or ambiguous signer certificate",
+		}, nil
+	}
+
+	var issuers []*x509.Certificate
+	for _, c := range embeddedCerts {
+		if c != nil && bytes.Equal(c.RawSubject, signerCert.RawIssuer) {
+			issuers = append(issuers, c)
+		}
+	}
+	for _, chain := range verifiedChains {
+		for _, c := range chain {
+			if c != nil && bytes.Equal(c.RawSubject, signerCert.RawIssuer) {
+				issuers = append(issuers, c)
+			}
+		}
+	}
+	if len(issuers) == 0 {
+		return AuthenticodeCheck{
+			Status: AuthenticodeStatusUnchecked,
+			Reason: "no issuer certificate available to verify CRL",
+		}, nil
+	}
+
+	verifiedCRL := false
+	checkList := func(crls []*x509.RevocationList) (AuthenticodeCheck, bool, error) {
+		for _, crl := range crls {
+			if crl == nil || !bytes.Equal(crl.RawIssuer, signerCert.RawIssuer) {
+				continue
+			}
+			sigOK := false
+			for _, issuer := range issuers {
+				if issuer.KeyUsage != 0 && issuer.KeyUsage&x509.KeyUsageCRLSign == 0 {
+					continue
+				}
+				if budget != nil {
+					if err := budget.consume("crl"); err != nil {
+						return AuthenticodeCheck{}, false, err
+					}
+				}
+				if crl.CheckSignatureFrom(issuer) == nil {
+					sigOK = true
+					break
+				}
+			}
+			if !sigOK {
+				continue
+			}
+			verifiedCRL = true
+			for _, entry := range crl.RevokedCertificateEntries {
+				if entry.SerialNumber != nil && entry.SerialNumber.Cmp(signerCert.SerialNumber) == 0 {
+					if !evalTime.IsZero() && entry.RevocationTime.After(evalTime) {
+						continue
+					}
+					return AuthenticodeCheck{
+						Status: AuthenticodeStatusInvalid,
+						Reason: fmt.Sprintf("certificate serial %s revoked at %s", signerCert.SerialNumber, entry.RevocationTime.UTC().Format(time.RFC3339)),
+					}, true, nil
+				}
+			}
+		}
+		return AuthenticodeCheck{}, false, nil
+	}
+
+	if res, done, err := checkList(embeddedCRLs); err != nil || done {
+		return res, err
+	}
+	if res, done, err := checkList(optionCRLs); err != nil || done {
+		return res, err
+	}
+	if verifiedCRL {
+		return AuthenticodeCheck{Status: AuthenticodeStatusValid}, nil
+	}
+	return AuthenticodeCheck{
+		Status: AuthenticodeStatusUnchecked,
+		Reason: "no verifiable CRL matched signer issuer",
+	}, nil
 }
 
 func buildIntermediatePool(base *x509.CertPool, extra []*x509.Certificate) *x509.CertPool {
