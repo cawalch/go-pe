@@ -4,9 +4,9 @@ go-pe is a Go library for reading Windows Portable Executable (PE) files. It
 supports PE32 and PE32+, uses only the Go standard library, and requires
 Go 1.26 or later.
 
-The library is an experimental MVP. [v0.1.0](https://github.com/cawalch/go-pe/releases/tag/v0.1.0)
-is the first release, and the API can change before v1.0.0. See the [release guide](docs/releases.md) for
-versioning and publishing plans.
+The library is an experimental MVP. [v0.2.0](https://github.com/cawalch/go-pe/releases/tag/v0.2.0)
+is the latest release, and the API can change before v1.0.0. See the [release guide](docs/releases.md) and
+[changelog](CHANGELOG.md) for versioning and release history.
 
 ## Supported features
 
@@ -32,7 +32,7 @@ headers and directories from an `io.ReaderAt` without loading the entire image.
 In your Go module, install the experimental release:
 
 ```sh
-go get github.com/cawalch/go-pe@v0.1.0
+go get github.com/cawalch/go-pe@v0.2.0
 ```
 
 For reproducible builds, commit the resulting `go.mod` and `go.sum` files. Go

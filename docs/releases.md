@@ -2,7 +2,8 @@
 
 This guide describes maintainer actions. The first experimental release,
 [v0.1.0](https://github.com/cawalch/go-pe/releases/tag/v0.1.0), was published on
-2026-11-17 from commit `b7801b4fce05bc41a27ea7f4aa136bc87233b6b9`.
+2026-11-17 from commit `b7801b4fce05bc41a27ea7f4aa136bc87233b6b9`. Subsequent
+releases are tracked in the [changelog](../CHANGELOG.md).
 
 ## Choose a version
 
