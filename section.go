@@ -177,16 +177,24 @@ func (f *File) OffsetToRVA(offset uint32) (uint32, bool) {
 // rvaSpan bounds a read by the original file, supplied data, RVA address space,
 // and selected mapping. It also stops before an earlier section takes priority.
 func (f *File) rvaSpan(data []byte, rva uint32) ([]byte, error) {
-	if f == nil {
+	fileEnd := min(f.fileSize, int64(len(data)), 1<<32)
+	offset, limit, ok := f.rvaRange(rva, fileEnd)
+	if !ok {
 		return nil, ErrOutOfBounds
 	}
-	fileEnd := min(f.fileSize, int64(len(data)), 1<<32)
+	return NewSafeReader(data).Slice(offset, limit)
+}
+
+func (f *File) rvaRange(rva uint32, fileEnd int64) (offset, limit int64, ok bool) {
+	if f == nil {
+		return 0, 0, false
+	}
 	if rva < f.OptionalHeader.SizeOfHeaders {
 		if int64(rva) >= fileEnd {
-			return nil, ErrOutOfBounds
+			return 0, 0, false
 		}
-		limit := min(fileEnd-int64(rva), 1<<32-int64(rva), int64(f.OptionalHeader.SizeOfHeaders-rva))
-		return NewSafeReader(data).Slice(int64(rva), limit)
+		limit = min(fileEnd-int64(rva), 1<<32-int64(rva), int64(f.OptionalHeader.SizeOfHeaders-rva))
+		return int64(rva), limit, true
 	}
 
 	nextVA := uint64(1 << 32)
@@ -202,13 +210,13 @@ func (f *File) rvaSpan(data []byte, rva uint32) ([]byte, error) {
 		}
 		delta := uint64(rva) - uint64(va)
 		if delta < uint64(size) {
-			offset := uint64(section.PointerToRawData) + delta
-			if delta >= uint64(section.SizeOfRawData) || offset > math.MaxUint32 || int64(offset) >= fileEnd {
-				return nil, ErrOutOfBounds
+			off := uint64(section.PointerToRawData) + delta
+			if delta >= uint64(section.SizeOfRawData) || off > math.MaxUint32 || int64(off) >= fileEnd {
+				return 0, 0, false
 			}
-			limit := min(fileEnd-int64(offset), int64(nextVA-uint64(rva)), int64(uint64(section.SizeOfRawData)-delta))
-			return NewSafeReader(data).Slice(int64(offset), limit)
+			limit = min(fileEnd-int64(off), int64(nextVA-uint64(rva)), int64(uint64(section.SizeOfRawData)-delta))
+			return int64(off), limit, true
 		}
 	}
-	return nil, ErrOutOfBounds
+	return 0, 0, false
 }
