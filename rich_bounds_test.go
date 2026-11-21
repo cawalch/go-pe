@@ -14,6 +14,10 @@ func TestRichHeaderValidationErrors(t *testing.T) {
 	if rh, err := nilFile.RichHeader(make([]byte, 128)); rh != nil || !errors.Is(err, pe.ErrInvalidRichHeader) {
 		t.Fatalf("nil file: got (%+v, %v), want ErrInvalidRichHeader", rh, err)
 	}
+	var unparsed pe.File
+	if rh, err := unparsed.RichHeader(make([]byte, 128)); rh != nil || !errors.Is(err, pe.ErrInvalidHeader) {
+		t.Fatalf("unparsed file: got (%+v, %v), want ErrInvalidHeader", rh, err)
+	}
 
 	validPE, _ := testfixture.RichPE(true, testfixture.RichOptions{
 		Entries: []testfixture.RichEntrySpec{{ToolID: 1, Version: 2, Count: 3}},

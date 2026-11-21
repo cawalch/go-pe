@@ -240,6 +240,13 @@ func (f *File) VerifyAuthenticode(data []byte, opts AuthenticodeVerifyOptions) (
 // VerifyAuthenticodeSignatures verifies pre-parsed Authenticode signatures
 // against data offline according to opts.
 func (f *File) VerifyAuthenticodeSignatures(data []byte, sigs []AuthenticodeSignature, opts AuthenticodeVerifyOptions) (AuthenticodeVerification, error) {
+	if f == nil || (!f.Is32Bit() && !f.Is64Bit()) {
+		return AuthenticodeVerification{}, fmt.Errorf("%w: file headers not parsed", ErrInvalidHeader)
+	}
+	if len(sigs) == 0 {
+		return AuthenticodeVerification{}, nil
+	}
+
 	maxOps := opts.MaxVerifyOps
 	if maxOps <= 0 {
 		maxOps = MaxAuthenticodeVerifyOps
@@ -253,10 +260,6 @@ func (f *File) VerifyAuthenticodeSignatures(data []byte, sigs []AuthenticodeSign
 		if err != nil {
 			return AuthenticodeVerification{}, err
 		}
-	}
-
-	if len(sigs) == 0 {
-		return AuthenticodeVerification{}, nil
 	}
 
 	var now time.Time

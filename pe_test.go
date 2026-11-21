@@ -132,3 +132,37 @@ func TestNonPEInput(t *testing.T) {
 		}
 	}
 }
+
+func TestNilFileReceiver(t *testing.T) {
+	var f *File
+	if f.FileSize() != 0 {
+		t.Errorf("FileSize() = %d, want 0", f.FileSize())
+	}
+	if ext, ok := f.DeclaredExtent(); ext != 0 || ok {
+		t.Errorf("DeclaredExtent() = (%d, %v), want (0, false)", ext, ok)
+	}
+	if f.InputTruncated() {
+		t.Error("InputTruncated() = true, want false")
+	}
+	if f.IsDLL() {
+		t.Error("IsDLL() = true, want false")
+	}
+	if f.Is64Bit() {
+		t.Error("Is64Bit() = true, want false")
+	}
+	if f.Is32Bit() {
+		t.Error("Is32Bit() = true, want false")
+	}
+	if f.NumberOfSections() != 0 {
+		t.Errorf("NumberOfSections() = %d, want 0", f.NumberOfSections())
+	}
+	if f.SectionByName(".text") != nil {
+		t.Error("SectionByName() != nil, want nil")
+	}
+	if off, ok := f.RVAToOffset(0x1000); off != 0 || ok {
+		t.Errorf("RVAToOffset() = (%d, %v), want (0, false)", off, ok)
+	}
+	if rva, ok := f.OffsetToRVA(0x200); rva != 0 || ok {
+		t.Errorf("OffsetToRVA() = (%d, %v), want (0, false)", rva, ok)
+	}
+}
