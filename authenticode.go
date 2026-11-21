@@ -84,13 +84,13 @@ type AuthenticodeSignature struct {
 	NestedDepth          int
 	TrailingPaddingBytes int
 	Version              int
-	ContentType      asn1.ObjectIdentifier
-	DigestAlgorithms []pkix.AlgorithmIdentifier
-	IndirectData     *AuthenticodeIndirectData
-	Content          []byte
-	Certificates     []*x509.Certificate
-	CRLs             []*x509.RevocationList
-	Signers          []AuthenticodeSigner
+	ContentType          asn1.ObjectIdentifier
+	DigestAlgorithms     []pkix.AlgorithmIdentifier
+	IndirectData         *AuthenticodeIndirectData
+	Content              []byte
+	Certificates         []*x509.Certificate
+	CRLs                 []*x509.RevocationList
+	Signers              []AuthenticodeSigner
 
 	encapContentKnown   bool
 	encapContentWrapped bool
