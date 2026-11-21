@@ -64,7 +64,7 @@ func TestCommonRichHeader(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				defer safe.Close()
+				defer func() { _ = safe.Close() }()
 				if err := safe.Parse(); err != nil {
 					t.Fatal(err)
 				}
@@ -119,7 +119,7 @@ func BenchmarkParseRichHeader(b *testing.B) {
 				b.Fatal(err)
 			}
 			err = safe.Parse()
-			safe.Close()
+			_ = safe.Close()
 			if err != nil || !safe.HasRichHdr || len(safe.RichHeader.CompIDs) != len(entries) {
 				b.Fatalf("saferwall RichHeader = (%+v, %v)", safe.RichHeader, err)
 			}

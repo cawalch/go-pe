@@ -71,7 +71,7 @@ func TestCommonDebugDirectory(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer safe.Close()
+			defer func() { _ = safe.Close() }()
 			if err := safe.Parse(); err != nil {
 				t.Fatal(err)
 			}
@@ -142,7 +142,7 @@ func BenchmarkParseDebug(b *testing.B) {
 				b.Fatal(err)
 			}
 			err = safe.Parse()
-			safe.Close()
+			_ = safe.Close()
 			if err != nil || len(safe.Debugs) != 2 {
 				b.Fatalf("saferwall Debugs = (%+v, %v)", safe.Debugs, err)
 			}

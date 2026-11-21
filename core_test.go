@@ -62,7 +62,7 @@ func TestHeaderParity(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer oracle.Close()
+		defer func() { _ = oracle.Close() }()
 		compareHeaderFields(t, f.FileHeader, oracle.FileHeader)
 		compareHeaderFields(t, f.OptionalHeader, reflect.ValueOf(oracle.OptionalHeader).Elem().Interface())
 		if len(f.Sections) != len(oracle.Sections) {
@@ -81,10 +81,10 @@ func TestHeaderParity(t *testing.T) {
 func compareHeaderFields(t *testing.T, got, want any) {
 	t.Helper()
 	g, w := reflect.ValueOf(got), reflect.ValueOf(want)
-	for i := 0; i < w.NumField(); i++ {
+	for i := range w.NumField() {
 		name := w.Type().Field(i).Name
 		if name == "DataDirectory" {
-			for j := 0; j < w.Field(i).Len(); j++ {
+			for j := range w.Field(i).Len() {
 				compareHeaderFields(t, g.FieldByName("DataDirectories").Index(j).Interface(), w.Field(i).Index(j).Interface())
 			}
 			continue

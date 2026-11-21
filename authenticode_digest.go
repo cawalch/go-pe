@@ -238,7 +238,7 @@ func validateDigestSections(sections []Section, sizeOfHeaders, fileSize uint64) 
 
 func (p authenticodeDigestPlan) visitIncluded(fn func(start, end uint64)) {
 	cursor := uint64(0)
-	for i := 0; i < p.excludeCount; i++ {
+	for i := range p.excludeCount {
 		ex := p.excludes[i]
 		if ex.start > cursor {
 			fn(cursor, ex.start)

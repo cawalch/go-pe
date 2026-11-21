@@ -51,7 +51,7 @@ func parseSections(r *SafeReader, offset int64, count uint16, stringTableOffset 
 	}
 	sections := make([]Section, count)
 
-	for i := 0; i < int(count); i++ {
+	for i := range int(count) {
 		b := table[i*40 : (i+1)*40]
 		name, err := parseSectionName(b[:8], r, stringTableOffset)
 		if err != nil {

@@ -87,13 +87,13 @@ func TestCrossLibraryHeadersAndImports(t *testing.T) {
 			if err != nil {
 				t.Fatalf("debug/pe NewFile: %v", err)
 			}
-			defer stdF.Close()
+			defer func() { _ = stdF.Close() }()
 
 			binF, err := binjectpe.NewFile(bytes.NewReader(fx.data))
 			if err != nil {
 				t.Fatalf("Binject NewFile: %v", err)
 			}
-			defer binF.Close()
+			defer func() { _ = binF.Close() }()
 
 			swF, err := saferwall.NewBytes(fx.data, fastHeaderOptions())
 			if err != nil {
@@ -217,7 +217,7 @@ func TestMalformedLimitAndNonPESemantics(t *testing.T) {
 				stdErr = err
 			} else {
 				_, stdErr = f.ImportedSymbols()
-				f.Close()
+				_ = f.Close()
 			}
 
 			binNewErr, binImpErr = func() (newErr, impErr error) {
@@ -230,7 +230,7 @@ func TestMalformedLimitAndNonPESemantics(t *testing.T) {
 				if err != nil {
 					return err, nil
 				}
-				defer f.Close()
+				defer func() { _ = f.Close() }()
 				_, impErr = f.ImportedSymbols()
 				return nil, impErr
 			}()

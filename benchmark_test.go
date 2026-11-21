@@ -40,7 +40,7 @@ func BenchmarkStandardLibraryHeaders(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		f.Close()
+		_ = f.Close()
 	}
 }
 

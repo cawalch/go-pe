@@ -10,6 +10,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -985,7 +986,7 @@ func validateSignedAttributes(
 	for _, attr := range attrs {
 		key := attr.Type.String()
 		if _, dup := seen[key]; dup {
-			return AuthenticodeStatusInvalid, fmt.Sprintf("duplicate signed attribute %s", key)
+			return AuthenticodeStatusInvalid, "duplicate signed attribute " + key
 		}
 		seen[key] = struct{}{}
 
@@ -1205,7 +1206,7 @@ func verifyAsymmetricSignature(pub crypto.PublicKey, plan signaturePlan, signedD
 	case sigKeyRSA:
 		rsaPub, ok := pub.(*rsa.PublicKey)
 		if !ok {
-			return fmt.Errorf("signer key type mismatch: expected RSA public key")
+			return errors.New("signer key type mismatch: expected RSA public key")
 		}
 		digest := computeHash(plan.hash, signedData)
 		if err := rsa.VerifyPKCS1v15(rsaPub, plan.hash, digest, signature); err != nil {
@@ -1216,7 +1217,7 @@ func verifyAsymmetricSignature(pub crypto.PublicKey, plan signaturePlan, signedD
 	case sigKeyRSAPSS:
 		rsaPub, ok := pub.(*rsa.PublicKey)
 		if !ok {
-			return fmt.Errorf("signer key type mismatch: expected RSA public key")
+			return errors.New("signer key type mismatch: expected RSA public key")
 		}
 		digest := computeHash(plan.hash, signedData)
 		if err := rsa.VerifyPSS(rsaPub, plan.hash, digest, signature, &rsa.PSSOptions{SaltLength: plan.pssSalt}); err != nil {
@@ -1227,26 +1228,26 @@ func verifyAsymmetricSignature(pub crypto.PublicKey, plan signaturePlan, signedD
 	case sigKeyECDSA:
 		ecPub, ok := pub.(*ecdsa.PublicKey)
 		if !ok {
-			return fmt.Errorf("signer key type mismatch: expected ECDSA public key")
+			return errors.New("signer key type mismatch: expected ECDSA public key")
 		}
 		digest := computeHash(plan.hash, signedData)
 		if !ecdsa.VerifyASN1(ecPub, digest, signature) {
-			return fmt.Errorf("ECDSA signature verification failed")
+			return errors.New("ECDSA signature verification failed")
 		}
 		return nil
 
 	case sigKeyEd25519:
 		edPub, ok := pub.(ed25519.PublicKey)
 		if !ok {
-			return fmt.Errorf("signer key type mismatch: expected Ed25519 public key")
+			return errors.New("signer key type mismatch: expected Ed25519 public key")
 		}
 		if !ed25519.Verify(edPub, signedData, signature) {
-			return fmt.Errorf("Ed25519 signature verification failed")
+			return errors.New("Ed25519 signature verification failed")
 		}
 		return nil
 
 	default:
-		return fmt.Errorf("unsupported signature plan")
+		return errors.New("unsupported signature plan")
 	}
 }
 

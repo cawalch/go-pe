@@ -473,7 +473,7 @@ func decodeCertificateSet(raw asn1.RawValue, budget *authParseBudget) ([]*x509.C
 		var elem asn1.RawValue
 		next, err := asn1.Unmarshal(rest, &elem)
 		if err != nil {
-			return nil, fmt.Errorf("%w: malformed certificate entry: %v", ErrInvalidAuthenticode, err)
+			return nil, fmt.Errorf("%w: malformed certificate entry: %w", ErrInvalidAuthenticode, err)
 		}
 		rest = next
 		// Skip non-X.509 certificate choices ([1], [2], [3] attribute certificates).
@@ -482,7 +482,7 @@ func decodeCertificateSet(raw asn1.RawValue, budget *authParseBudget) ([]*x509.C
 		}
 		cert, err := x509.ParseCertificate(bytes.Clone(elem.FullBytes))
 		if err != nil {
-			return nil, fmt.Errorf("%w: invalid X.509 certificate: %v", ErrInvalidAuthenticode, err)
+			return nil, fmt.Errorf("%w: invalid X.509 certificate: %w", ErrInvalidAuthenticode, err)
 		}
 		budget.certs++
 		certs = append(certs, cert)
@@ -503,7 +503,7 @@ func decodeCRLSet(raw asn1.RawValue, budget *authParseBudget) ([]*x509.Revocatio
 		var elem asn1.RawValue
 		next, err := asn1.Unmarshal(rest, &elem)
 		if err != nil {
-			return nil, fmt.Errorf("%w: malformed CRL entry: %v", ErrInvalidAuthenticode, err)
+			return nil, fmt.Errorf("%w: malformed CRL entry: %w", ErrInvalidAuthenticode, err)
 		}
 		rest = next
 		// Skip non-X.509 revocation choices ([1] other).
@@ -512,7 +512,7 @@ func decodeCRLSet(raw asn1.RawValue, budget *authParseBudget) ([]*x509.Revocatio
 		}
 		crl, err := x509.ParseRevocationList(bytes.Clone(elem.FullBytes))
 		if err != nil {
-			return nil, fmt.Errorf("%w: invalid X.509 CRL: %v", ErrInvalidAuthenticode, err)
+			return nil, fmt.Errorf("%w: invalid X.509 CRL: %w", ErrInvalidAuthenticode, err)
 		}
 		budget.crls++
 		crls = append(crls, crl)
@@ -627,7 +627,7 @@ func decodeAttributes(setContents []byte) ([]AuthenticodeAttribute, error) {
 		var attr rawAttribute
 		next, err := asn1.Unmarshal(rest, &attr)
 		if err != nil {
-			return nil, fmt.Errorf("%w: malformed CMS attribute: %v", ErrInvalidAuthenticode, err)
+			return nil, fmt.Errorf("%w: malformed CMS attribute: %w", ErrInvalidAuthenticode, err)
 		}
 		rest = next
 		vals := make([][]byte, len(attr.Values))

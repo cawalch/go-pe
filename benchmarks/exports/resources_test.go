@@ -124,7 +124,7 @@ func TestCommonResourceRecords(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer safe.Close()
+			defer func() { _ = safe.Close() }()
 			if err := safe.Parse(); err != nil {
 				t.Fatal(err)
 			}
@@ -169,7 +169,7 @@ func BenchmarkParseResources(b *testing.B) {
 					b.Fatal(err)
 				}
 				err = f.Parse()
-				f.Close()
+				_ = f.Close()
 				if err != nil || !f.HasResource || len(f.Resources.Entries) == 0 || len(f.Resources.Entries[0].Directory.Entries) != count {
 					b.Fatalf("saferwall resources: %v", err)
 				}

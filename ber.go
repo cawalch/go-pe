@@ -197,7 +197,7 @@ func emitBERElement(src []byte, offset int, lengths []int, lenIdx *int, dst *[]b
 		childDERLen := lengths[*lenIdx]
 		*lenIdx++
 		appendDERLength(dst, childDERLen)
-		for !(src[offset] == 0 && src[offset+1] == 0) {
+		for src[offset] != 0 || src[offset+1] != 0 {
 			offset = emitBERElement(src, offset, lengths, lenIdx, dst)
 		}
 		return offset + 2
