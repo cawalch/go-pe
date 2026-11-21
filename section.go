@@ -122,6 +122,9 @@ func parseSectionName(raw []byte, r *SafeReader, stringTableOffset int64) (strin
 // Virtual zero-fill, missing bytes, and overflow return false.
 // This method doesn't emulate the Windows loader.
 func (f *File) RVAToOffset(rva uint32) (uint32, bool) {
+	if f == nil {
+		return 0, false
+	}
 	if rva < f.OptionalHeader.SizeOfHeaders {
 		if int64(rva) >= f.fileSize {
 			return 0, false
@@ -149,7 +152,7 @@ func (f *File) RVAToOffset(rva uint32) (uint32, bool) {
 // the original input or those ranges, and RVAs that overflow, return false.
 // If sections overlap, this method might not invert [File.RVAToOffset].
 func (f *File) OffsetToRVA(offset uint32) (uint32, bool) {
-	if int64(offset) >= f.fileSize {
+	if f == nil || int64(offset) >= f.fileSize {
 		return 0, false
 	}
 	if offset < f.OptionalHeader.SizeOfHeaders {

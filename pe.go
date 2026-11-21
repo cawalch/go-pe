@@ -162,27 +162,33 @@ func (f *File) InputTruncated() bool {
 // IsDLL reports whether the COFF characteristics mark the image as a
 // dynamic-link library (DLL).
 func (f *File) IsDLL() bool {
-	return f.FileHeader.Characteristics&CharacteristicsDLL != 0
+	return f != nil && f.FileHeader.Characteristics&CharacteristicsDLL != 0
 }
 
 // Is64Bit reports whether the file uses the PE32+ optional header format.
 func (f *File) Is64Bit() bool {
-	return f.OptionalHeader.Magic == OptionalHeaderMagicPE32P
+	return f != nil && f.OptionalHeader.Magic == OptionalHeaderMagicPE32P
 }
 
 // Is32Bit reports whether the file uses the PE32 optional header format.
 func (f *File) Is32Bit() bool {
-	return f.OptionalHeader.Magic == OptionalHeaderMagicPE32
+	return f != nil && f.OptionalHeader.Magic == OptionalHeaderMagicPE32
 }
 
 // NumberOfSections returns the number of parsed sections.
 func (f *File) NumberOfSections() int {
+	if f == nil {
+		return 0
+	}
 	return len(f.Sections)
 }
 
 // SectionByName returns a pointer into Sections for the first matching name,
 // or nil. Modifying the returned section modifies the File.
 func (f *File) SectionByName(name string) *Section {
+	if f == nil {
+		return nil
+	}
 	for i := range f.Sections {
 		if f.Sections[i].Name == name {
 			return &f.Sections[i]

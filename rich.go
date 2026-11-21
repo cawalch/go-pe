@@ -92,6 +92,9 @@ func (f *File) RichHeader(data []byte) (*RichHeader, error) {
 	if f == nil || len(data) < dosHeaderSize {
 		return nil, fmt.Errorf("%w: missing DOS header", ErrInvalidRichHeader)
 	}
+	if !f.Is32Bit() && !f.Is64Bit() {
+		return nil, fmt.Errorf("%w: file headers not parsed", ErrInvalidHeader)
+	}
 	peOffset := int64(f.DOSHeader.AddressOfNewEXEHeader)
 	if peOffset < dosHeaderSize {
 		return nil, fmt.Errorf("%w: PE header offset %d overlaps DOS header", ErrInvalidRichHeader, peOffset)

@@ -722,3 +722,30 @@ func TestVerifyAuthenticodeTimestampChainBudget(t *testing.T) {
 		})
 	}
 }
+
+func TestVerifyAuthenticodeNilAndEmptySignatures(t *testing.T) {
+	var nilFile *pe.File
+	if _, err := nilFile.VerifyAuthenticode(nil, pe.AuthenticodeVerifyOptions{}); !errors.Is(err, pe.ErrInvalidHeader) {
+		t.Fatalf("nil VerifyAuthenticode err = %v, want ErrInvalidHeader", err)
+	}
+	if _, err := nilFile.VerifyAuthenticodeSignatures(nil, nil, pe.AuthenticodeVerifyOptions{}); !errors.Is(err, pe.ErrInvalidHeader) {
+		t.Fatalf("nil VerifyAuthenticodeSignatures err = %v, want ErrInvalidHeader", err)
+	}
+	if _, err := nilFile.VerifyAuthenticodeSignatures(nil, nil, pe.AuthenticodeVerifyOptions{SkipImageDigest: true}); !errors.Is(err, pe.ErrInvalidHeader) {
+		t.Fatalf("nil VerifyAuthenticodeSignatures(SkipImageDigest) err = %v, want ErrInvalidHeader", err)
+	}
+
+	// Empty signature slice returns empty verification without validating or hashing data.
+	unsigned := testfixture.MinimalAligned(true)
+	f, err := pe.New(unsigned)
+	if err != nil {
+		t.Fatalf("pe.New(unsigned): %v", err)
+	}
+	res, err := f.VerifyAuthenticodeSignatures(nil, nil, pe.AuthenticodeVerifyOptions{})
+	if err != nil {
+		t.Fatalf("VerifyAuthenticodeSignatures(empty sigs, nil data): %v", err)
+	}
+	if len(res.Signatures) != 0 {
+		t.Fatalf("expected 0 signatures, got %d", len(res.Signatures))
+	}
+}
