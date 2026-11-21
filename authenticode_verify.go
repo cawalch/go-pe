@@ -117,6 +117,11 @@ type AuthenticodeVerifyOptions struct {
 	// not require PE image digest checks.
 	SkipImageDigest bool
 
+	// StrictPadding treats trailing NUL padding after a PKCS#7 SignedData TLV
+	// as invalid ([AuthenticodeStatusInvalid]) in [AuthenticodeSignatureVerification.Padding],
+	// mirroring Windows EnableCertPaddingCheck (CVE-2013-3900) hardening.
+	StrictPadding bool
+
 	// KeyUsages overrides extended key usage requirements for publisher chain
 	// verification when Roots is non-nil. Defaults to [x509.ExtKeyUsageCodeSigning].
 	KeyUsages []x509.ExtKeyUsage
@@ -145,6 +150,7 @@ type AuthenticodeSignatureVerification struct {
 	RecordOffset   uint32
 	NestedDepth    int
 	Digest         AuthenticodeDigestVerification
+	Padding        AuthenticodeCheck
 	Signers        []AuthenticodeSignerVerification
 }
 
@@ -333,6 +339,7 @@ func verifySingleAuthenticodeSignature(
 		RecordOffset:   sig.RecordOffset,
 		NestedDepth:    sig.NestedDepth,
 		Digest:         verifyImageDigest(sig, computedDigests, opts.SkipImageDigest),
+		Padding:        verifySignaturePadding(sig.TrailingPaddingBytes, opts.StrictPadding),
 	}
 
 	if len(sig.Signers) == 0 {
@@ -402,6 +409,22 @@ func verifyImageDigest(sig AuthenticodeSignature, computedDigests map[crypto.Has
 	}
 	out.Status = AuthenticodeStatusValid
 	return out
+}
+
+func verifySignaturePadding(trailingBytes int, strict bool) AuthenticodeCheck {
+	if trailingBytes == 0 {
+		return AuthenticodeCheck{Status: AuthenticodeStatusValid}
+	}
+	if strict {
+		return AuthenticodeCheck{
+			Status: AuthenticodeStatusInvalid,
+			Reason: fmt.Sprintf("PKCS#7 payload has %d trailing padding bytes", trailingBytes),
+		}
+	}
+	return AuthenticodeCheck{
+		Status: AuthenticodeStatusUnchecked,
+		Reason: fmt.Sprintf("PKCS#7 payload has %d trailing NUL padding bytes (StrictPadding disabled)", trailingBytes),
+	}
 }
 
 func verifyAuthenticodeSigner(
