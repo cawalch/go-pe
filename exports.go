@@ -66,26 +66,14 @@ type ExportSymbol struct {
 // and data. Forwarder strings must also terminate within the directory's RVA
 // range. Other tables and names may lie outside that range.
 func (f *File) Exports(data []byte) (*ExportDirectory, error) {
-	if f == nil || (!f.Is32Bit() && !f.Is64Bit()) {
-		return nil, ErrInvalidHeader
+	dir, ok, err := f.dataDirectory(DataDirectoryExport, ErrInvalidExport)
+	if err != nil || !ok {
+		return nil, err
 	}
-	if f.OptionalHeader.NumberOfRvaAndSizes <= DataDirectoryExport {
-		return nil, nil
-	}
-	dir := f.OptionalHeader.DataDirectories[DataDirectoryExport]
-	if dir.VirtualAddress == 0 && dir.Size == 0 {
-		return nil, nil
-	}
-	if dir.VirtualAddress == 0 || dir.Size < 40 {
+	if dir.Size < 40 {
 		return nil, fmt.Errorf("%w: incomplete directory", ErrInvalidExport)
 	}
 	end := uint64(dir.VirtualAddress) + uint64(dir.Size)
-	if end > 1<<32 {
-		return nil, ErrIntegerOverflow
-	}
-	if len(f.Sections) > MaxSections {
-		return nil, ErrSectionLimit
-	}
 	p := exportParser{file: f, data: data, stringBytes: MaxExportStringBytes}
 	header, err := p.table(dir.VirtualAddress, 40)
 	if err != nil {

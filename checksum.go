@@ -16,8 +16,8 @@ const MaxCheckSumBytes = MaxAuthenticodeDigestBytes
 // Pass the complete byte slice used with [New]. The returned value can be
 // compared against OptionalHeader.CheckSum via [File.VerifyCheckSum].
 func (f *File) ComputeCheckSum(data []byte) (uint32, error) {
-	if f == nil || (!f.Is32Bit() && !f.Is64Bit()) {
-		return 0, fmt.Errorf("%w: file headers not parsed", ErrInvalidHeader)
+	if err := f.validateParsedHeaders(); err != nil {
+		return 0, err
 	}
 	if f.fileSize < 0 || int64(len(data)) != f.fileSize {
 		return 0, fmt.Errorf("%w: input size %d does not match parsed file size %d", ErrOutOfBounds, len(data), f.fileSize)

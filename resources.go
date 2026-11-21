@@ -119,24 +119,9 @@ type ResourceRecord struct {
 // raw metadata independent of the resource directory bounds and may point to any
 // section when later read via [File.ResourcePayload].
 func (f *File) Resources(data []byte) (*ResourceDirectory, error) {
-	if f == nil || (!f.Is32Bit() && !f.Is64Bit()) {
-		return nil, fmt.Errorf("%w: file headers not parsed", ErrInvalidHeader)
-	}
-	if len(f.Sections) > MaxSections {
-		return nil, fmt.Errorf("%w: %d exceeds %d", ErrSectionLimit, len(f.Sections), MaxSections)
-	}
-	if f.OptionalHeader.NumberOfRvaAndSizes <= DataDirectoryResource {
-		return nil, nil
-	}
-	dir := f.OptionalHeader.DataDirectories[DataDirectoryResource]
-	if dir.VirtualAddress == 0 && dir.Size == 0 {
-		return nil, nil
-	}
-	if dir.VirtualAddress == 0 || dir.Size == 0 {
-		return nil, fmt.Errorf("%w: incomplete resource data directory", ErrInvalidResource)
-	}
-	if uint64(dir.VirtualAddress)+uint64(dir.Size) > uint64(math.MaxUint32)+1 {
-		return nil, fmt.Errorf("%w: resource directory extends past 32-bit RVA space", ErrIntegerOverflow)
+	dir, ok, err := f.dataDirectory(DataDirectoryResource, ErrInvalidResource)
+	if err != nil || !ok {
+		return nil, err
 	}
 	if dir.Size < resourceDirectoryHeaderSize {
 		return nil, fmt.Errorf("%w: resource directory size %d smaller than %d-byte header", ErrInvalidResource, dir.Size, resourceDirectoryHeaderSize)
@@ -166,11 +151,8 @@ func (f *File) Resources(data []byte) (*ResourceDirectory, error) {
 // other than `.rsrc`, provided the full byte range fits within one contiguous
 // mapped span.
 func (f *File) ResourcePayload(data []byte, record ResourceRecord) ([]byte, error) {
-	if f == nil || (!f.Is32Bit() && !f.Is64Bit()) {
-		return nil, fmt.Errorf("%w: file headers not parsed", ErrInvalidHeader)
-	}
-	if len(f.Sections) > MaxSections {
-		return nil, fmt.Errorf("%w: %d exceeds %d", ErrSectionLimit, len(f.Sections), MaxSections)
+	if err := f.validateParsedHeaders(); err != nil {
+		return nil, err
 	}
 	if uint64(record.Size) > MaxResourcePayloadBytes {
 		return nil, fmt.Errorf("%w: resource payload size %d exceeds %d", ErrResourceLimit, record.Size, MaxResourcePayloadBytes)

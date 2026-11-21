@@ -179,8 +179,8 @@ func (f *File) OverlayOffset() (int64, bool) {
 // [File.DeclaredExtent], or (nil, false, nil) when no overlay is present.
 // Pass the complete byte slice used with [New].
 func (f *File) Overlay(data []byte) ([]byte, bool, error) {
-	if f == nil || (!f.Is32Bit() && !f.Is64Bit()) {
-		return nil, false, fmt.Errorf("%w: file headers not parsed", ErrInvalidHeader)
+	if err := f.validateParsedHeaders(); err != nil {
+		return nil, false, err
 	}
 	if f.fileSize < 0 || int64(len(data)) != f.fileSize {
 		return nil, false, fmt.Errorf("%w: input size %d does not match parsed file size %d", ErrOutOfBounds, len(data), f.fileSize)
@@ -231,4 +231,34 @@ func (f *File) SectionByName(name string) *Section {
 		}
 	}
 	return nil
+}
+
+func (f *File) validateParsedHeaders() error {
+	if f == nil || (!f.Is32Bit() && !f.Is64Bit()) {
+		return fmt.Errorf("%w: file headers not parsed", ErrInvalidHeader)
+	}
+	if len(f.Sections) > MaxSections {
+		return fmt.Errorf("%w: %d exceeds %d", ErrSectionLimit, len(f.Sections), MaxSections)
+	}
+	return nil
+}
+
+func (f *File) dataDirectory(index int, invalidErr error) (DataDirectory, bool, error) {
+	if err := f.validateParsedHeaders(); err != nil {
+		return DataDirectory{}, false, err
+	}
+	if f.OptionalHeader.NumberOfRvaAndSizes <= uint32(index) {
+		return DataDirectory{}, false, nil
+	}
+	dir := f.OptionalHeader.DataDirectories[index]
+	if dir.VirtualAddress == 0 && dir.Size == 0 {
+		return DataDirectory{}, false, nil
+	}
+	if dir.VirtualAddress == 0 || dir.Size == 0 {
+		return DataDirectory{}, false, fmt.Errorf("%w: incomplete directory descriptor", invalidErr)
+	}
+	if uint64(dir.VirtualAddress)+uint64(dir.Size) > 1<<32 {
+		return DataDirectory{}, false, fmt.Errorf("%w: directory extent overflows 32-bit space", ErrIntegerOverflow)
+	}
+	return dir, true, nil
 }

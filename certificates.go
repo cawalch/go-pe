@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math"
 )
 
 // Attribute certificate revisions and types defined by the PE/COFF WIN_CERTIFICATE
@@ -169,29 +168,13 @@ func (f *File) CertificatePayload(data []byte, record CertificateRecord) ([]byte
 }
 
 func certificateDirectoryBounds(f *File, data []byte) (dirStart, dirEnd uint64, ok bool, err error) {
-	if f == nil || (!f.Is32Bit() && !f.Is64Bit()) {
-		return 0, 0, false, fmt.Errorf("%w: file headers not parsed", ErrInvalidHeader)
-	}
-	if len(f.Sections) > MaxSections {
-		return 0, 0, false, fmt.Errorf("%w: %d exceeds %d", ErrSectionLimit, len(f.Sections), MaxSections)
-	}
-	if f.OptionalHeader.NumberOfRvaAndSizes <= DataDirectoryCertificate {
-		return 0, 0, false, nil
-	}
-
-	dir := f.OptionalHeader.DataDirectories[DataDirectoryCertificate]
-	if dir.VirtualAddress == 0 && dir.Size == 0 {
-		return 0, 0, false, nil
-	}
-	if dir.VirtualAddress == 0 || dir.Size == 0 {
-		return 0, 0, false, fmt.Errorf("%w: incomplete security data directory", ErrInvalidCertificate)
+	dir, hasDir, err := f.dataDirectory(DataDirectoryCertificate, ErrInvalidCertificate)
+	if err != nil || !hasDir {
+		return 0, 0, false, err
 	}
 
 	dirStart = uint64(dir.VirtualAddress)
 	dirSize := uint64(dir.Size)
-	if dirStart+dirSize > uint64(math.MaxUint32)+1 {
-		return 0, 0, false, fmt.Errorf("%w: security directory extends past 32-bit file offset space", ErrIntegerOverflow)
-	}
 	if dirStart%8 != 0 {
 		return 0, 0, false, fmt.Errorf("%w: unaligned security directory at offset %#x", ErrInvalidCertificate, dir.VirtualAddress)
 	}
