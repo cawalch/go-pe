@@ -177,32 +177,38 @@ func (f *File) OffsetToRVA(offset uint32) (uint32, bool) {
 // rvaSpan bounds a read by the original file, supplied data, RVA address space,
 // and selected mapping. It also stops before an earlier section takes priority.
 func (f *File) rvaSpan(data []byte, rva uint32) ([]byte, error) {
-	offset, ok := f.RVAToOffset(rva)
-	fileEnd := min(f.fileSize, int64(len(data)), 1<<32)
-	if !ok || int64(offset) >= fileEnd {
+	if f == nil {
 		return nil, ErrOutOfBounds
 	}
-	limit := min(fileEnd-int64(offset), 1<<32-int64(rva))
+	fileEnd := min(f.fileSize, int64(len(data)), 1<<32)
 	if rva < f.OptionalHeader.SizeOfHeaders {
-		limit = min(limit, int64(f.OptionalHeader.SizeOfHeaders-rva))
-	} else {
-		for _, section := range f.Sections {
-			va := section.VirtualAddress
-			size := max(section.VirtualSize, section.SizeOfRawData)
-			if size == 0 {
-				continue
+		if int64(rva) >= fileEnd {
+			return nil, ErrOutOfBounds
+		}
+		limit := min(fileEnd-int64(rva), 1<<32-int64(rva), int64(f.OptionalHeader.SizeOfHeaders-rva))
+		return NewSafeReader(data).Slice(int64(rva), limit)
+	}
+
+	nextVA := uint64(1 << 32)
+	for i := range f.Sections {
+		section := &f.Sections[i]
+		va := section.VirtualAddress
+		size := max(section.VirtualSize, section.SizeOfRawData)
+		if rva < va {
+			if size > 0 && uint64(va) < nextVA {
+				nextVA = uint64(va)
 			}
-			if rva < va {
-				limit = min(limit, int64(va-rva))
-				continue
+			continue
+		}
+		delta := uint64(rva) - uint64(va)
+		if delta < uint64(size) {
+			offset := uint64(section.PointerToRawData) + delta
+			if delta >= uint64(section.SizeOfRawData) || offset > math.MaxUint32 || int64(offset) >= fileEnd {
+				return nil, ErrOutOfBounds
 			}
-			delta := rva - va
-			if delta < size {
-				// RVAToOffset has already checked that delta is in raw data.
-				limit = min(limit, int64(section.SizeOfRawData-delta))
-				break
-			}
+			limit := min(fileEnd-int64(offset), int64(nextVA-uint64(rva)), int64(uint64(section.SizeOfRawData)-delta))
+			return NewSafeReader(data).Slice(int64(offset), limit)
 		}
 	}
-	return NewSafeReader(data).Slice(int64(offset), limit)
+	return nil, ErrOutOfBounds
 }

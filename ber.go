@@ -12,6 +12,7 @@ const (
 
 type berState struct {
 	elements int
+	lengths  []int
 }
 
 // berToDER converts definite or indefinite-length BER input into a freshly
@@ -29,9 +30,8 @@ func berToDER(input []byte) ([]byte, error) {
 		return nil, fmt.Errorf("%w: ASN.1 input size %d exceeds %d", ErrAuthenticodeLimit, len(input), MaxCertificateBytes)
 	}
 
-	out := make([]byte, 0, len(input))
 	var st berState
-	end, err := copyBERElement(input, 0, len(input), 1, &st, &out)
+	end, derLen, err := measureBERElement(input, 0, len(input), 1, &st)
 	if err != nil {
 		return nil, err
 	}
@@ -40,19 +40,23 @@ func berToDER(input []byte) ([]byte, error) {
 			return nil, fmt.Errorf("%w: trailing non-zero data at offset %d", ErrInvalidAuthenticode, i)
 		}
 	}
+
+	out := make([]byte, 0, derLen)
+	lenIdx := 0
+	emitBERElement(input, 0, st.lengths, &lenIdx, &out)
 	return out, nil
 }
 
-func copyBERElement(src []byte, offset, parentEnd, depth int, st *berState, dst *[]byte) (int, error) {
+func measureBERElement(src []byte, offset, parentEnd, depth int, st *berState) (nextOffset int, derSize int, err error) {
 	if depth > MaxASN1Depth {
-		return 0, fmt.Errorf("%w: ASN.1 nesting depth exceeds %d", ErrAuthenticodeLimit, MaxASN1Depth)
+		return 0, 0, fmt.Errorf("%w: ASN.1 nesting depth exceeds %d", ErrAuthenticodeLimit, MaxASN1Depth)
 	}
 	st.elements++
 	if st.elements > MaxASN1Elements {
-		return 0, fmt.Errorf("%w: ASN.1 element count exceeds %d", ErrAuthenticodeLimit, MaxASN1Elements)
+		return 0, 0, fmt.Errorf("%w: ASN.1 element count exceeds %d", ErrAuthenticodeLimit, MaxASN1Elements)
 	}
 	if offset >= parentEnd {
-		return 0, fmt.Errorf("%w: unexpected end of ASN.1 data", ErrInvalidAuthenticode)
+		return 0, 0, fmt.Errorf("%w: unexpected end of ASN.1 data", ErrInvalidAuthenticode)
 	}
 
 	tagStart := offset
@@ -66,57 +70,56 @@ func copyBERElement(src []byte, offset, parentEnd, depth int, st *berState, dst 
 		count := 0
 		for {
 			if offset >= parentEnd {
-				return 0, fmt.Errorf("%w: truncated ASN.1 high-tag identifier", ErrInvalidAuthenticode)
+				return 0, 0, fmt.Errorf("%w: truncated ASN.1 high-tag identifier", ErrInvalidAuthenticode)
 			}
 			count++
 			if count > maxHighTagOctets {
-				return 0, fmt.Errorf("%w: ASN.1 tag identifier too large", ErrInvalidAuthenticode)
+				return 0, 0, fmt.Errorf("%w: ASN.1 tag identifier too large", ErrInvalidAuthenticode)
 			}
 			b := src[offset]
 			offset++
 			if count == 1 && b == 0x80 {
-				return 0, fmt.Errorf("%w: non-minimal ASN.1 high-tag identifier", ErrInvalidAuthenticode)
+				return 0, 0, fmt.Errorf("%w: non-minimal ASN.1 high-tag identifier", ErrInvalidAuthenticode)
 			}
 			if b&0x80 == 0 {
 				break
 			}
 		}
 	}
-	tagEnd := offset
+	tagLen := offset - tagStart
 
 	if offset >= parentEnd {
-		return 0, fmt.Errorf("%w: truncated ASN.1 length", ErrInvalidAuthenticode)
+		return 0, 0, fmt.Errorf("%w: truncated ASN.1 length", ErrInvalidAuthenticode)
 	}
 	lenOctet := src[offset]
 	offset++
 
-	*dst = append(*dst, src[tagStart:tagEnd]...)
-
 	if lenOctet == 0x80 {
 		if !constructed {
-			return 0, fmt.Errorf("%w: primitive ASN.1 tag cannot use indefinite length", ErrInvalidAuthenticode)
+			return 0, 0, fmt.Errorf("%w: primitive ASN.1 tag cannot use indefinite length", ErrInvalidAuthenticode)
 		}
-		lenPos := len(*dst)
-		*dst = append(*dst, 0) // Placeholder for 1-byte DER length.
-		childrenStart := lenPos + 1
+		lenPos := len(st.lengths)
+		st.lengths = append(st.lengths, 0)
 
+		childDERLen := 0
 		for {
 			if offset+2 > parentEnd {
-				return 0, fmt.Errorf("%w: unterminated indefinite-length ASN.1 container", ErrInvalidAuthenticode)
+				return 0, 0, fmt.Errorf("%w: unterminated indefinite-length ASN.1 container", ErrInvalidAuthenticode)
 			}
 			if src[offset] == 0 && src[offset+1] == 0 {
 				offset += 2
 				break
 			}
-			next, err := copyBERElement(src, offset, parentEnd, depth+1, st, dst)
+			next, cLen, err := measureBERElement(src, offset, parentEnd, depth+1, st)
 			if err != nil {
-				return 0, err
+				return 0, 0, err
 			}
 			offset = next
+			childDERLen += cLen
 		}
 
-		patchDERLength(dst, lenPos, childrenStart)
-		return offset, nil
+		st.lengths[lenPos] = childDERLen
+		return offset, tagLen + derLengthSize(childDERLen) + childDERLen, nil
 	}
 
 	var length int
@@ -125,13 +128,13 @@ func copyBERElement(src []byte, offset, parentEnd, depth int, st *berState, dst 
 	} else {
 		numBytes := int(lenOctet & 0x7f)
 		if numBytes == 0 || numBytes > 4 {
-			return 0, fmt.Errorf("%w: unsupported ASN.1 length octet count %d", ErrInvalidAuthenticode, numBytes)
+			return 0, 0, fmt.Errorf("%w: unsupported ASN.1 length octet count %d", ErrInvalidAuthenticode, numBytes)
 		}
 		if offset+numBytes > parentEnd {
-			return 0, fmt.Errorf("%w: truncated ASN.1 long-form length", ErrInvalidAuthenticode)
+			return 0, 0, fmt.Errorf("%w: truncated ASN.1 long-form length", ErrInvalidAuthenticode)
 		}
 		if numBytes == 4 && src[offset] > 0x7f {
-			return 0, fmt.Errorf("%w: ASN.1 length overflows 31-bit bound", ErrInvalidAuthenticode)
+			return 0, 0, fmt.Errorf("%w: ASN.1 length overflows 31-bit bound", ErrInvalidAuthenticode)
 		}
 		var ulen uint64
 		for i := range numBytes {
@@ -139,55 +142,109 @@ func copyBERElement(src []byte, offset, parentEnd, depth int, st *berState, dst 
 		}
 		offset += numBytes
 		if ulen > uint64(parentEnd-offset) {
-			return 0, fmt.Errorf("%w: ASN.1 length %d exceeds container bounds %d", ErrInvalidAuthenticode, ulen, parentEnd-offset)
+			return 0, 0, fmt.Errorf("%w: ASN.1 length %d exceeds container bounds %d", ErrInvalidAuthenticode, ulen, parentEnd-offset)
 		}
 		length = int(ulen)
 	}
 	if length > parentEnd-offset {
-		return 0, fmt.Errorf("%w: ASN.1 length %d exceeds container bounds %d", ErrInvalidAuthenticode, length, parentEnd-offset)
+		return 0, 0, fmt.Errorf("%w: ASN.1 length %d exceeds container bounds %d", ErrInvalidAuthenticode, length, parentEnd-offset)
+	}
+
+	contentEnd := offset + length
+	if !constructed {
+		return contentEnd, tagLen + derLengthSize(length) + length, nil
+	}
+
+	lenPos := len(st.lengths)
+	st.lengths = append(st.lengths, 0)
+	childDERLen := 0
+	cursor := offset
+	for cursor < contentEnd {
+		next, cLen, err := measureBERElement(src, cursor, contentEnd, depth+1, st)
+		if err != nil {
+			return 0, 0, err
+		}
+		cursor = next
+		childDERLen += cLen
+	}
+	st.lengths[lenPos] = childDERLen
+	return contentEnd, tagLen + derLengthSize(childDERLen) + childDERLen, nil
+}
+
+func emitBERElement(src []byte, offset int, lengths []int, lenIdx *int, dst *[]byte) int {
+	tagStart := offset
+	first := src[offset]
+	offset++
+	constructed := first&0x20 != 0
+
+	if first&0x1f == 0x1f {
+		for src[offset]&0x80 != 0 {
+			offset++
+		}
+		offset++
+	}
+	*dst = append(*dst, src[tagStart:offset]...)
+
+	lenOctet := src[offset]
+	offset++
+
+	if lenOctet == 0x80 {
+		childDERLen := lengths[*lenIdx]
+		*lenIdx++
+		appendDERLength(dst, childDERLen)
+		for !(src[offset] == 0 && src[offset+1] == 0) {
+			offset = emitBERElement(src, offset, lengths, lenIdx, dst)
+		}
+		return offset + 2
+	}
+
+	var length int
+	if lenOctet < 0x80 {
+		length = int(lenOctet)
+	} else {
+		numBytes := int(lenOctet & 0x7f)
+		for range numBytes {
+			length = (length << 8) | int(src[offset])
+			offset++
+		}
 	}
 
 	contentEnd := offset + length
 	if !constructed {
 		appendDERLength(dst, length)
 		*dst = append(*dst, src[offset:contentEnd]...)
-		return contentEnd, nil
+		return contentEnd
 	}
 
-	lenPos := len(*dst)
-	*dst = append(*dst, 0) // Placeholder for 1-byte DER length.
-	childrenStart := lenPos + 1
+	childDERLen := lengths[*lenIdx]
+	*lenIdx++
+	appendDERLength(dst, childDERLen)
 	cursor := offset
 	for cursor < contentEnd {
-		next, err := copyBERElement(src, cursor, contentEnd, depth+1, st, dst)
-		if err != nil {
-			return 0, err
-		}
-		cursor = next
+		cursor = emitBERElement(src, cursor, lengths, lenIdx, dst)
 	}
-	patchDERLength(dst, lenPos, childrenStart)
-	return contentEnd, nil
+	return contentEnd
+}
+
+func derLengthSize(n int) int {
+	switch {
+	case n < 0x80:
+		return 1
+	case n <= 0xff:
+		return 2
+	case n <= 0xffff:
+		return 3
+	case n <= 0xffffff:
+		return 4
+	default:
+		return 5
+	}
 }
 
 func appendDERLength(dst *[]byte, n int) {
 	var enc [5]byte
 	m := encodeDERLength(&enc, n)
 	*dst = append(*dst, enc[:m]...)
-}
-
-func patchDERLength(dst *[]byte, lenPos, childrenStart int) {
-	childLen := len(*dst) - childrenStart
-	var enc [5]byte
-	m := encodeDERLength(&enc, childLen)
-	if m == 1 {
-		(*dst)[lenPos] = enc[0]
-		return
-	}
-	extra := m - 1
-	var pad [4]byte
-	*dst = append(*dst, pad[:extra]...)
-	copy((*dst)[lenPos+m:], (*dst)[childrenStart:childrenStart+childLen])
-	copy((*dst)[lenPos:], enc[:m])
 }
 
 func encodeDERLength(buf *[5]byte, n int) int {
