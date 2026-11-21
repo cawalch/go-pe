@@ -7,7 +7,11 @@
 // functions return a metadata snapshot that retains no reference to the input.
 // They require complete headers but don't validate section bodies or data
 // directory contents; inspect [File.FileSize], [File.DeclaredExtent], and
-// [File.InputTruncated] to check whether the input covers all declared extents.
+// [File.InputTruncated] to check whether the input covers all declared extents,
+// [File.OverlayOffset] and [File.Overlay] to inspect trailing bytes beyond the
+// declared extent, [File.LayoutAnomalies] and [File.HasOverlappingSections] to
+// detect header or section overlaps, and [File.ComputeCheckSum] and
+// [File.VerifyCheckSum] to compute or verify the 16-bit PE header checksum.
 // To read standard imports, pass the original bytes to [File.Imports]. It returns
 // owned records (including derived IAT slot RVAs when valid) and bounds parsing
 // work with descriptor, symbol, and name limits. Use [File.DelayImports] to
@@ -24,10 +28,12 @@
 // verifying signatures or trust chains. Use [File.AuthenticodeDigest],
 // [File.AuthenticodeDigests], and [File.AuthenticodeDigestRanges] to inspect
 // excluded ranges and compute checked Authenticode PE image digests. Use
-// [File.VerifyAuthenticode] and [File.VerifyAuthenticodeSignatures] to check
-// image-digest agreement, CMS signed attributes and signatures, PKCS#9/RFC 3161
-// timestamps, and optional explicit trust roots offline without ambient OS
-// trust or network lookups. None of these methods cache results.
+// [File.VerifyAuthenticode] and [File.VerifyAuthenticodeSignatures] check
+// image-digest agreement, trailing certificate padding ([AuthenticodeVerifyOptions.StrictPadding]),
+// CMS signed attributes and signatures, PKCS#9/RFC 3161 timestamps, embedded or
+// caller-supplied CRLs ([AuthenticodeVerifyOptions.CRLs]), and optional explicit
+// trust roots offline without ambient OS trust or network lookups. None of these
+// methods cache results.
 // Use [File.Resources] and [File.ResourcePayload] to read resource directory
 // headers, leaf paths, and explicit resource payloads under depth, graph, and
 // size bounds. Use [ParseVersionInfo] to decode VS_VERSION_INFO fixed file
