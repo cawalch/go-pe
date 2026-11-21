@@ -70,6 +70,7 @@ type RichHeader struct {
 	Key              uint32
 	ComputedChecksum uint32
 	ChecksumValid    bool
+	PaddingNonZero   bool
 	RawData          []byte
 	ClearData        []byte
 	Entries          []RichEntry
@@ -82,9 +83,10 @@ type RichHeader struct {
 // RichHeader returns (nil, nil). When multiple markers exist, RichHeader scans
 // backward from e_lfanew for the last "Rich" marker and then backward in 4-byte
 // steps for the nearest matching XOR-encoded "DanS" marker. Missing matching
-// markers, zero XOR keys, unaligned spans, and non-zero padding return
-// [ErrInvalidRichHeader]; checksum mismatches still return the decoded header
-// with ChecksumValid set to false.
+// markers, zero XOR keys, and short or unaligned spans return
+// [ErrInvalidRichHeader]; non-zero padding words in [4, 16) after "DanS" are
+// preserved with PaddingNonZero set to true, and checksum mismatches return the
+// decoded header with ChecksumValid set to false.
 //
 // Results own their slices and retain no reference to data. Calls don't cache
 // results or modify f.
@@ -166,9 +168,11 @@ func (f *File) RichHeader(data []byte) (*RichHeader, error) {
 		binary.LittleEndian.PutUint32(clear[off:off+4], val)
 	}
 
+	paddingNonZero := false
 	for off := 4; off < richHeaderMinBytes; off += 4 {
 		if binary.LittleEndian.Uint32(clear[off:off+4]) != 0 {
-			return nil, fmt.Errorf("%w: non-zero padding word at header offset %d", ErrInvalidRichHeader, off)
+			paddingNonZero = true
+			break
 		}
 	}
 
@@ -203,6 +207,7 @@ func (f *File) RichHeader(data []byte) (*RichHeader, error) {
 		Key:              key,
 		ComputedChecksum: checksum,
 		ChecksumValid:    checksum == key,
+		PaddingNonZero:   paddingNonZero,
 		RawData:          raw,
 		ClearData:        clear,
 		Entries:          entries,

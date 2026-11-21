@@ -214,11 +214,12 @@ Use `File.RichHeader` to locate and decode MSVC-style Rich metadata between the
 - Scans backward from `e_lfanew` for the last `"Rich"` marker and then backward
   in 4-byte steps for the nearest XOR-encoded `"DanS"` marker.
 - Returns `Offset`, `RichOffset`, `Length`, `Key`, `RawData`, `ClearData`,
-  ordered `Entries` (`ToolID`, `Version`, `Count`), `ComputedChecksum`, and
-  `ChecksumValid`.
+  ordered `Entries` (`ToolID`, `Version`, `Count`), `ComputedChecksum`,
+  `ChecksumValid`, and `PaddingNonZero`.
 - Computes and reports `ChecksumValid == false` on checksum mismatch rather than
-  returning an error; returns `ErrInvalidRichHeader` on missing matching markers,
-  zero XOR keys, short or unaligned spans, or non-zero header padding, and
+  returning an error, and preserves non-zero 12-byte padding after `"DanS"`
+  with `PaddingNonZero == true`; returns `ErrInvalidRichHeader` on missing
+  matching markers, zero XOR keys, or short or unaligned spans, and
   `ErrRichHeaderLimit` when `MaxRichStubBytes`, `MaxRichHeaderBytes`, or
   `MaxRichEntries` is exceeded.
 

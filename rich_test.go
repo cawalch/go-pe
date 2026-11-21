@@ -212,3 +212,29 @@ func TestRichHeaderMultipleMarkersAndConcurrency(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestRichHeaderNonZeroPadding(t *testing.T) {
+	// Per erocarrera/pefile#394 and VirusTotal/yara@4793b49, real Microsoft
+	// binaries can have non-zero uninitialized bytes in the 12-byte padding
+	// after "DanS".
+	for _, pad := range [][3]uint32{{1, 0, 0}, {0, 0, 0xdead}} {
+		data, wantChecksum := testfixture.RichPE(true, testfixture.RichOptions{
+			Padding: pad,
+			Entries: []testfixture.RichEntrySpec{{ToolID: 0x0104, Version: 0x725d, Count: 5}},
+		})
+		f, err := pe.New(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rh, err := f.RichHeader(data)
+		if err != nil {
+			t.Fatalf("pad=%v RichHeader err = %v", pad, err)
+		}
+		if !rh.PaddingNonZero || len(rh.Entries) != 1 || rh.Entries[0].Count != 5 {
+			t.Fatalf("pad=%v got %+v", pad, rh)
+		}
+		if rh.ComputedChecksum != wantChecksum || !rh.ChecksumValid {
+			t.Fatalf("pad=%v checksum mismatch: got (%#x, %t), want %#x", pad, rh.ComputedChecksum, rh.ChecksumValid, wantChecksum)
+		}
+	}
+}

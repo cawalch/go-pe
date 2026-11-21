@@ -119,28 +119,6 @@ func TestRichHeaderValidationErrors(t *testing.T) {
 			}(),
 			wantErr: pe.ErrInvalidRichHeader,
 		},
-		{
-			name: "invalid_padding_word_0",
-			stub: func() []byte {
-				blk, _ := testfixture.EncodeRichBlock(make([]byte, 0x40), testfixture.RichOptions{
-					Padding: [3]uint32{1, 0, 0},
-					Entries: []testfixture.RichEntrySpec{{ToolID: 1, Version: 1, Count: 1}},
-				})
-				return blk
-			}(),
-			wantErr: pe.ErrInvalidRichHeader,
-		},
-		{
-			name: "invalid_padding_word_2",
-			stub: func() []byte {
-				blk, _ := testfixture.EncodeRichBlock(make([]byte, 0x40), testfixture.RichOptions{
-					Padding: [3]uint32{0, 0, 0xdead},
-					Entries: []testfixture.RichEntrySpec{{ToolID: 1, Version: 1, Count: 1}},
-				})
-				return blk
-			}(),
-			wantErr: pe.ErrInvalidRichHeader,
-		},
 	}
 
 	for _, tc := range cases {
