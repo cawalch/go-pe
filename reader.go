@@ -104,8 +104,8 @@ func (r *SafeReader) ReadASCIIZ(offset int64, maxLen int64) (string, error) {
 		maxLen = available
 	}
 	b := r.data[offset : offset+maxLen]
-	if i := bytes.IndexByte(b, 0); i >= 0 {
-		return string(b[:i]), nil
+	if before, _, ok := bytes.Cut(b, []byte{0}); ok {
+		return string(before), nil
 	}
 	return "", ErrUnterminatedString
 }
