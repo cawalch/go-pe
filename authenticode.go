@@ -28,6 +28,9 @@ const (
 	// MaxAuthenticodeCertificates limits cumulative X.509 certificates parsed
 	// across a signature parse call.
 	MaxAuthenticodeCertificates = 256
+	// MaxAuthenticodeCRLs limits cumulative X.509 CRLs parsed across a
+	// signature parse call.
+	MaxAuthenticodeCRLs = 256
 	// MaxAuthenticodeAttributes limits attributes in a single SignerInfo's
 	// authenticated or unauthenticated attribute set.
 	MaxAuthenticodeAttributes = 256
@@ -85,6 +88,7 @@ type AuthenticodeSignature struct {
 	IndirectData     *AuthenticodeIndirectData
 	Content          []byte
 	Certificates     []*x509.Certificate
+	CRLs             []*x509.RevocationList
 	Signers          []AuthenticodeSigner
 
 	encapContentKnown   bool
@@ -160,6 +164,7 @@ type authParseBudget struct {
 	signatures int
 	signers    int
 	certs      int
+	crls       int
 }
 
 // AuthenticodeSignatures decodes bounded PKCS#7 SignedData metadata across all
@@ -314,12 +319,23 @@ type rawSpcSpOpusInfo struct {
 	MoreInfo    rawSpcLink   `asn1:"optional,tag:1"`
 }
 
+type rawTSTAccuracy struct {
+	Seconds int `asn1:"optional"`
+	Millis  int `asn1:"optional,tag:0"`
+	Micros  int `asn1:"optional,tag:1"`
+}
+
 type rawTSTInfo struct {
 	Version        int
 	Policy         asn1.ObjectIdentifier
 	MessageImprint rawDigestInfo
 	SerialNumber   *big.Int
-	GenTime        time.Time `asn1:"generalized"`
+	GenTime        time.Time      `asn1:"generalized"`
+	Accuracy       rawTSTAccuracy `asn1:"optional"`
+	Ordering       bool           `asn1:"optional,default:false"`
+	Nonce          *big.Int       `asn1:"optional"`
+	TSA            asn1.RawValue  `asn1:"optional,explicit,tag:0"`
+	Extensions     asn1.RawValue  `asn1:"optional,tag:1"`
 }
 
 func parseSignedDataRecursive(der []byte, recordOffset uint32, nestedDepth int, budget *authParseBudget, out *[]AuthenticodeSignature) error {
@@ -369,6 +385,10 @@ func decodeSignedDataLayer(der []byte, recordOffset uint32, nestedDepth int, bud
 	if err != nil {
 		return AuthenticodeSignature{}, nil, err
 	}
+	crls, err := decodeCRLSet(sd.CRLs, budget)
+	if err != nil {
+		return AuthenticodeSignature{}, nil, err
+	}
 
 	var contentBytes []byte
 	var encapKnown bool
@@ -405,6 +425,7 @@ func decodeSignedDataLayer(der []byte, recordOffset uint32, nestedDepth int, bud
 		IndirectData:        indirect,
 		Content:             contentBytes,
 		Certificates:        certs,
+		CRLs:                crls,
 		Signers:             signers,
 		encapContentKnown:   encapKnown,
 		encapContentWrapped: encapWrapped,
@@ -465,6 +486,36 @@ func decodeCertificateSet(raw asn1.RawValue, budget *authParseBudget) ([]*x509.C
 		certs = append(certs, cert)
 	}
 	return certs, nil
+}
+
+func decodeCRLSet(raw asn1.RawValue, budget *authParseBudget) ([]*x509.RevocationList, error) {
+	if len(raw.Bytes) == 0 {
+		return nil, nil
+	}
+	var crls []*x509.RevocationList
+	rest := raw.Bytes
+	for len(rest) > 0 {
+		if budget.crls >= MaxAuthenticodeCRLs {
+			return nil, fmt.Errorf("%w: CRL count exceeds %d", ErrAuthenticodeLimit, MaxAuthenticodeCRLs)
+		}
+		var elem asn1.RawValue
+		next, err := asn1.Unmarshal(rest, &elem)
+		if err != nil {
+			return nil, fmt.Errorf("%w: malformed CRL entry: %v", ErrInvalidAuthenticode, err)
+		}
+		rest = next
+		// Skip non-X.509 revocation choices ([1] other).
+		if elem.Class != asn1.ClassUniversal || elem.Tag != asn1.TagSequence {
+			continue
+		}
+		crl, err := x509.ParseRevocationList(bytes.Clone(elem.FullBytes))
+		if err != nil {
+			return nil, fmt.Errorf("%w: invalid X.509 CRL: %v", ErrInvalidAuthenticode, err)
+		}
+		budget.crls++
+		crls = append(crls, crl)
+	}
+	return crls, nil
 }
 
 func decodeSignerInfos(raw asn1.RawValue, budget *authParseBudget) ([]AuthenticodeSigner, [][]byte, error) {
@@ -619,9 +670,17 @@ func applyAuthenticatedAttributes(signer *AuthenticodeSigner) error {
 				return fmt.Errorf("%w: malformed SpcSpOpusInfo attribute", ErrInvalidAuthenticode)
 			}
 			if signer.OpusInfo == nil {
+				programName, err := decodeSpcString(opus.ProgramName)
+				if err != nil {
+					return err
+				}
+				moreInfoURL, err := decodeSpcLinkURL(opus.MoreInfo)
+				if err != nil {
+					return err
+				}
 				signer.OpusInfo = &AuthenticodeOpusInfo{
-					ProgramName: decodeSpcString(opus.ProgramName),
-					MoreInfoURL: decodeSpcLinkURL(opus.MoreInfo),
+					ProgramName: programName,
+					MoreInfoURL: moreInfoURL,
 				}
 			}
 		}
@@ -686,7 +745,8 @@ func decodeRFC3161Timestamp(raw []byte, budget *authParseBudget) (AuthenticodeTi
 	}
 	if sig.ContentType.Equal(OIDTSTInfo) && len(sig.Content) > 0 {
 		var tst rawTSTInfo
-		if _, err := asn1.Unmarshal(sig.Content, &tst); err != nil {
+		rest, err := asn1.Unmarshal(sig.Content, &tst)
+		if err != nil || len(rest) != 0 {
 			return AuthenticodeTimestamp{}, fmt.Errorf("%w: malformed RFC 3161 TSTInfo", ErrInvalidAuthenticode)
 		}
 		ts.HasSigningTime = true
@@ -701,20 +761,23 @@ func decodeRFC3161Timestamp(raw []byte, budget *authParseBudget) (AuthenticodeTi
 	return ts, nil
 }
 
-func decodeSpcString(s rawSpcString) string {
-	if len(s.Unicode) != 0 && len(s.Unicode)%2 == 0 {
+func decodeSpcString(s rawSpcString) (string, error) {
+	if len(s.Unicode) != 0 {
+		if len(s.Unicode)%2 != 0 {
+			return "", fmt.Errorf("%w: odd-length UTF-16BE SpcString", ErrInvalidAuthenticode)
+		}
 		words := make([]uint16, len(s.Unicode)/2)
 		for i := range words {
 			words[i] = binary.BigEndian.Uint16(s.Unicode[i*2:])
 		}
-		return string(utf16.Decode(words))
+		return string(utf16.Decode(words)), nil
 	}
-	return s.ASCII
+	return s.ASCII, nil
 }
 
-func decodeSpcLinkURL(link rawSpcLink) string {
+func decodeSpcLinkURL(link rawSpcLink) (string, error) {
 	if link.URL != "" {
-		return link.URL
+		return link.URL, nil
 	}
 	return decodeSpcString(link.File)
 }

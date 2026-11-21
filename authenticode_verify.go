@@ -1082,6 +1082,9 @@ func resolveSignaturePlan(sigAlg pkix.AlgorithmIdentifier, signerDigest crypto.H
 		return matchExplicitHashSig(sigKeyECDSA, crypto.SHA512, signerDigest, x509.ECDSAWithSHA512)
 
 	case oid.Equal(oidEd25519):
+		if signerDigest != crypto.SHA512 {
+			return signaturePlan{}, AuthenticodeStatusInvalid, "SignerInfo DigestAlgorithm must be SHA-512 for Ed25519"
+		}
 		return signaturePlan{
 			keyKind: sigKeyEd25519,
 			hash:    signerDigest,
