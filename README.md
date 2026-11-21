@@ -11,8 +11,9 @@ versioning and publishing plans.
 ## Supported features
 
 - Read headers, sections, standard and delayed imports, and exports.
-- Compute import hashes and convert relative virtual addresses (RVAs) to file
-  offsets and back.
+- Compute import hashes, verify PE header checksums, inspect overlays and layout
+  anomalies, and convert relative virtual addresses (RVAs) to file offsets and
+  back.
 - Read resources, version information, Rich headers, and CodeView debug records.
 - Extract attribute certificates and Authenticode signature metadata.
 - Compute Authenticode image digests and verify signatures and timestamps
@@ -128,6 +129,8 @@ for individual types and methods.
 | Parse Authenticode signatures | `File.AuthenticodeSignatures`, `ParseAuthenticodeSignatures` | [API reference](https://pkg.go.dev/github.com/cawalch/go-pe#File.AuthenticodeSignatures) |
 | Compute Authenticode digests | `File.AuthenticodeDigest`, `File.AuthenticodeDigests`, `File.AuthenticodeDigestRanges` | [Image digests](docs/parsing.md#calculate-authenticode-image-digests) |
 | Verify Authenticode signatures and timestamps | `File.VerifyAuthenticode`, `File.VerifyAuthenticodeSignatures` | [Offline verification](docs/parsing.md#verify-authenticode-integrity-and-timestamps-offline) |
+| Compute PE checksums | `File.ComputeCheckSum`, `File.VerifyCheckSum` | [API reference](https://pkg.go.dev/github.com/cawalch/go-pe#File.ComputeCheckSum) |
+| Inspect overlays and layout anomalies | `File.OverlayOffset`, `File.Overlay`, `File.LayoutAnomalies`, `File.HasOverlappingSections` | [API reference](https://pkg.go.dev/github.com/cawalch/go-pe#File.OverlayOffset) |
 | Convert addresses | `File.RVAToOffset`, `File.OffsetToRVA` | [Address conversion](docs/parsing.md#convert-addresses) |
 
 ## Integrate with an application
