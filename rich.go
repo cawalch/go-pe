@@ -162,15 +162,15 @@ func (f *File) RichHeader(data []byte) (*RichHeader, error) {
 	span := int(bodyLen)
 	raw := make([]byte, span)
 	copy(raw, data[dansOffset:richOffset])
-	clear := make([]byte, span)
+	clearBuf := make([]byte, span)
 	for off := 0; off < span; off += 4 {
 		val := binary.LittleEndian.Uint32(raw[off:off+4]) ^ key
-		binary.LittleEndian.PutUint32(clear[off:off+4], val)
+		binary.LittleEndian.PutUint32(clearBuf[off:off+4], val)
 	}
 
 	paddingNonZero := false
 	for off := 4; off < richHeaderMinBytes; off += 4 {
-		if binary.LittleEndian.Uint32(clear[off:off+4]) != 0 {
+		if binary.LittleEndian.Uint32(clearBuf[off:off+4]) != 0 {
 			paddingNonZero = true
 			break
 		}
@@ -181,7 +181,7 @@ func (f *File) RichHeader(data []byte) (*RichHeader, error) {
 		return nil, fmt.Errorf("%w: DanS offset %d exceeds uint32", ErrInvalidRichHeader, dansOffset)
 	}
 	checksum := uint32(dansOffset)
-	for i := 0; i < int(dansOffset); i++ {
+	for i := range int(dansOffset) {
 		if i >= dosLfanewOffset && i < dosLfanewOffset+4 {
 			continue
 		}
@@ -190,8 +190,8 @@ func (f *File) RichHeader(data []byte) (*RichHeader, error) {
 
 	for i := range entryCount {
 		off := richHeaderMinBytes + i*richEntrySize
-		compID := binary.LittleEndian.Uint32(clear[off : off+4])
-		count := binary.LittleEndian.Uint32(clear[off+4 : off+8])
+		compID := binary.LittleEndian.Uint32(clearBuf[off : off+4])
+		count := binary.LittleEndian.Uint32(clearBuf[off+4 : off+8])
 		entries[i] = RichEntry{
 			ToolID:  uint16(compID >> 16),
 			Version: uint16(compID & 0xffff),
@@ -209,7 +209,7 @@ func (f *File) RichHeader(data []byte) (*RichHeader, error) {
 		ChecksumValid:    checksum == key,
 		PaddingNonZero:   paddingNonZero,
 		RawData:          raw,
-		ClearData:        clear,
+		ClearData:        clearBuf,
 		Entries:          entries,
 	}, nil
 }

@@ -228,7 +228,7 @@ func parseDataDirectories(data []byte, opt *OptionalHeader) error {
 		return fmt.Errorf("%w: data directories exceed optional header", ErrInvalidHeader)
 	}
 	count := min(opt.NumberOfRvaAndSizes, NumberOfDataDirectories)
-	for i := uint32(0); i < count; i++ {
+	for i := range count {
 		entry := data[i*8 : (i+1)*8]
 		opt.DataDirectories[i] = DataDirectory{
 			VirtualAddress: binary.LittleEndian.Uint32(entry[0:4]),

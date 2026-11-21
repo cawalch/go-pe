@@ -67,7 +67,7 @@ func BenchmarkParseImports(b *testing.B) {
 					b.Fatal(err)
 				}
 				_, err = f.ImportedSymbols()
-				f.Close()
+				_ = f.Close()
 				if err != nil {
 					b.Fatal(err)
 				}

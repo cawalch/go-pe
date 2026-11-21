@@ -58,7 +58,7 @@ func TestGoCompilerCorpus(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer oracle.Close()
+			defer func() { _ = oracle.Close() }()
 			if f.FileHeader.Machine != oracle.Machine || len(f.Sections) != len(oracle.Sections) {
 				t.Fatal("header mismatch")
 			}

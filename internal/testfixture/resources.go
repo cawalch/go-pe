@@ -116,7 +116,7 @@ func ResourcesWithDataSection(is64 bool, root *ResourceNodeSpec, extraData []byt
 	}
 
 	allocNode(root)
-	for qi := 0; qi < len(queue); qi++ {
+	for qi := 0; qi < len(queue); qi++ { //nolint:intrange // queue grows during BFS
 		n := queue[qi]
 		base := int(nodeOffsets[n])
 		for i, e := range n.Entries {

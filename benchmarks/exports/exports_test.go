@@ -63,7 +63,7 @@ func TestCommonExportRecords(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				defer other.Close()
+				defer func() { _ = other.Close() }()
 				exports, err := other.Exports()
 				if err != nil {
 					t.Fatal(err)
@@ -79,7 +79,7 @@ func TestCommonExportRecords(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				defer safe.Close()
+				defer func() { _ = safe.Close() }()
 				if err := safe.Parse(); err != nil {
 					t.Fatal(err)
 				}
@@ -125,7 +125,7 @@ func BenchmarkParseExports(b *testing.B) {
 					b.Fatal(err)
 				}
 				out, err := f.Exports()
-				f.Close()
+				_ = f.Close()
 				if err != nil || len(out) != count {
 					b.Fatalf("exports: %v", err)
 				}
@@ -139,7 +139,7 @@ func BenchmarkParseExports(b *testing.B) {
 					b.Fatal(err)
 				}
 				err = f.Parse()
-				f.Close()
+				_ = f.Close()
 				if err != nil || len(f.Export.Functions) != count {
 					b.Fatalf("exports: %v", err)
 				}

@@ -62,7 +62,7 @@ func TestCommonDelayImports(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer safe.Close()
+			defer func() { _ = safe.Close() }()
 			if err := safe.Parse(); err != nil {
 				t.Fatal(err)
 			}
@@ -118,7 +118,7 @@ func BenchmarkParseDelayImports(b *testing.B) {
 					b.Fatal(err)
 				}
 				err = safe.Parse()
-				safe.Close()
+				_ = safe.Close()
 				if err != nil || len(safe.DelayImports) != 1 || len(safe.DelayImports[0].Functions) != count {
 					b.Fatalf("saferwall DelayImports = (%+v, %v)", safe.DelayImports, err)
 				}

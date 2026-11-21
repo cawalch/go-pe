@@ -151,7 +151,7 @@ func TestImportsStandardLibrary(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer oracle.Close()
+			defer func() { _ = oracle.Close() }()
 			want, err := oracle.ImportedSymbols()
 			if err != nil || len(want) == 0 || !reflect.DeepEqual(names, want) {
 				t.Fatalf("got %v; debug/pe returned %v, %v", names, want, err)

@@ -47,7 +47,7 @@ func TestCertificatesTruncationSweep(t *testing.T) {
 			}
 
 			// Every truncated prefix shorter than the full security directory must fail.
-			for n := range len(data) {
+			for n := range data {
 				prefix := data[:n]
 				parsed, err := pe.New(prefix)
 				if err != nil {

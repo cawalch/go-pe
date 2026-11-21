@@ -67,10 +67,10 @@ func FuzzSafeReader(f *testing.F) {
 		if err == nil && int64(len(b)) != length {
 			t.Fatal("wrong slice length")
 		}
-		r.ReadUint8(offset)
-		r.ReadUint16(offset)
-		r.ReadUint32(offset)
-		r.ReadUint64(offset)
-		r.ReadASCIIZ(offset, length)
+		_, _ = r.ReadUint8(offset)
+		_, _ = r.ReadUint16(offset)
+		_, _ = r.ReadUint32(offset)
+		_, _ = r.ReadUint64(offset)
+		_, _ = r.ReadASCIIZ(offset, length)
 	})
 }

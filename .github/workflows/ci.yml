@@ -103,3 +103,22 @@ jobs:
       - name: Check comparison dependencies
         working-directory: benchmarks/exports
         run: govulncheck -test ./...
+
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: stable
+          cache: false
+      - name: Install pinned golangci-lint
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
+      - name: Lint root module
+        run: golangci-lint run ./...
+      - name: Lint comparison module
+        working-directory: benchmarks/exports
+        run: golangci-lint run --config ../../.golangci.yml ./...

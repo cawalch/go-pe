@@ -26,7 +26,7 @@ func TestCommonImphash(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer safe.Close()
+			defer func() { _ = safe.Close() }()
 			if err := safe.Parse(); err != nil {
 				t.Fatal(err)
 			}
@@ -66,11 +66,11 @@ func BenchmarkImphashComparison(b *testing.B) {
 				b.Fatal(err)
 			}
 			if err := safe.Parse(); err != nil {
-				safe.Close()
+				_ = safe.Close()
 				b.Fatal(err)
 			}
 			sum, err := safe.ImpHash()
-			safe.Close()
+			_ = safe.Close()
 			if err != nil || sum == "" {
 				b.Fatalf("saferwall ImpHash = (%q, %v)", sum, err)
 			}

@@ -58,7 +58,7 @@ func TestResourcesTruncationSweep(t *testing.T) {
 			}
 
 			metaEnd := rsrcStart + int(full.OptionalHeader.DataDirectories[pe.DataDirectoryResource].Size) - len("hello-world-payload")
-			for n := range len(data) {
+			for n := range data {
 				prefix := data[:n]
 				if n < metaEnd {
 					if parsed, err := pe.New(prefix); err == nil {
