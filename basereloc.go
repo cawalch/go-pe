@@ -89,11 +89,15 @@ func (f *File) BaseRelocs(data []byte) (*BaseRelocDirectory, error) {
 		}
 
 		active := 0
-		for i := range entryCount {
+		for i := 0; i < entryCount; i++ {
 			raw := binary.LittleEndian.Uint16(table[pos+8+i*2 : pos+10+i*2])
 			relType := raw >> 12
 			if relType != RelocBasedAbsolute {
 				active++
+				if relType == RelocBasedHighAdj && i+1 < entryCount {
+					// HIGHADJ consumes the following 16-bit parameter word.
+					i++
+				}
 			}
 		}
 

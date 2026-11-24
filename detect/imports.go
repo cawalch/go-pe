@@ -52,8 +52,8 @@ var sensitiveDelayAPIs = map[string]struct{}{
 // delay-load API hiding, minimal-IAT API hashing, suspicious API clusters, and
 // reflective-DLL / export anomalies.
 func ImportsAndExports(f *pe.File, data []byte) (ImportAnomalies, error) {
-	if f == nil {
-		return ImportAnomalies{}, fmt.Errorf("%w: nil File", pe.ErrInvalidHeader)
+	if f == nil || (!f.Is32Bit() && !f.Is64Bit()) {
+		return ImportAnomalies{}, fmt.Errorf("%w: file headers not parsed", pe.ErrInvalidHeader)
 	}
 	imports, err := f.Imports(data)
 	if err != nil {
@@ -105,7 +105,8 @@ func ImportsAndExports(f *pe.File, data []byte) (ImportAnomalies, error) {
 	}
 
 	hasCLR := f.OptionalHeader.NumberOfRvaAndSizes > pe.DataDirectoryCLRRuntime &&
-		f.OptionalHeader.DataDirectories[pe.DataDirectoryCLRRuntime].VirtualAddress != 0
+		f.OptionalHeader.DataDirectories[pe.DataDirectoryCLRRuntime].VirtualAddress != 0 &&
+		f.OptionalHeader.DataDirectories[pe.DataDirectoryCLRRuntime].Size != 0
 	if !hasCLR && stdCount <= 3 && len(delays) == 0 && f.OptionalHeader.AddressOfEntryPoint != 0 {
 		if hasHighEntropyNonDebugSection(f, data, 7.0) {
 			out.MinimalIATWithHighEntropy = true
@@ -135,7 +136,7 @@ func ImportsAndExports(f *pe.File, data []byte) (ImportAnomalies, error) {
 		for i := range exports.Symbols {
 			for _, name := range exports.Symbols[i].Names {
 				low := strings.ToLower(name)
-				if strings.Contains(low, "reflectiveloader") || low == "reflective_loader" {
+				if strings.Contains(low, "reflectiveloader") || strings.Contains(low, "reflective_loader") {
 					out.ReflectiveDLLExports = append(out.ReflectiveDLLExports, name)
 				}
 			}

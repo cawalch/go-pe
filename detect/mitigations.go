@@ -22,8 +22,8 @@ func (m MitigationAnomalies) Any() bool {
 // Mitigations checks GuardCF and ASLR (DynamicBase) consistency against
 // [pe.File.LoadConfig] and [pe.File.BaseRelocs].
 func Mitigations(f *pe.File, data []byte) (MitigationAnomalies, error) {
-	if f == nil {
-		return MitigationAnomalies{}, fmt.Errorf("%w: nil File", pe.ErrInvalidHeader)
+	if f == nil || (!f.Is32Bit() && !f.Is64Bit()) {
+		return MitigationAnomalies{}, fmt.Errorf("%w: file headers not parsed", pe.ErrInvalidHeader)
 	}
 	var out MitigationAnomalies
 	dllChars := f.OptionalHeader.DllCharacteristics

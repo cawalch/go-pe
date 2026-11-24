@@ -22,6 +22,20 @@ func TestRichAndPDB(t *testing.T) {
 		t.Fatalf("valid RichPE reported anomalies: (%+v, %v)", rAnom, err)
 	}
 
+	// MSVC-linked Windows Rust binaries legitimately have a Rich header.
+	rustRich, _ := testfixture.RichPE(true, testfixture.RichOptions{
+		Entries: []testfixture.RichEntrySpec{{ToolID: 0x0104, Version: 0x725d, Count: 2}},
+	})
+	fRustRich, err := pe.New(rustRich)
+	if err != nil {
+		t.Fatal(err)
+	}
+	copy(rustRich[fRustRich.Sections[0].PointerToRawData:], `panicked at library\core\src\panicking.rs`)
+	rRustAnom, err := detect.Rich(fRustRich, rustRich)
+	if err != nil || rRustAnom.SpoofedOnNonMSVC {
+		t.Fatalf("MSVC Rust binary should not trigger SpoofedOnNonMSVC: (%+v, %v)", rRustAnom, err)
+	}
+
 	badRich, _ := testfixture.RichPE(true, testfixture.RichOptions{
 		Entries:      []testfixture.RichEntrySpec{{ToolID: 0x0104, Version: 0x725d, Count: 2}},
 		Padding:      [3]uint32{1, 0, 0},

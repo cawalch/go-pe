@@ -75,13 +75,21 @@ func (f *File) LoadConfig(data []byte) (*LoadConfigDirectory, error) {
 	if uint64(len(span)) < uint64(dir.Size) {
 		return nil, fmt.Errorf("load config directory: %w", ErrOutOfBounds)
 	}
-	b := span[:dir.Size]
 
-	declaredSize := binary.LittleEndian.Uint32(b[0:4])
+	declaredSize := binary.LittleEndian.Uint32(span[0:4])
 	if declaredSize < 64 {
 		return nil, fmt.Errorf("%w: declared Size %d smaller than 64", ErrInvalidLoadConfig, declaredSize)
 	}
-	avail := min(int(declaredSize), len(b))
+	if declaredSize > MaxLoadConfigBytes {
+		return nil, fmt.Errorf("%w: declared Size %d exceeds %d", ErrLoadConfigLimit, declaredSize, MaxLoadConfigBytes)
+	}
+	if uint64(len(span)) < uint64(declaredSize) {
+		return nil, fmt.Errorf("load config directory: %w", ErrOutOfBounds)
+	}
+	// MSVC often sets DataDirectory.Size to 0x40 (64) for legacy loader
+	// compatibility while storing the full struct length in the leading Size field.
+	b := span[:declaredSize]
+	avail := len(b)
 
 	out := &LoadConfigDirectory{
 		Size:                          declaredSize,
@@ -122,8 +130,8 @@ func (f *File) LoadConfig(data []byte) (*LoadConfigDirectory, error) {
 			out.GuardCFFunctionCount = uint64(binary.LittleEndian.Uint32(b[84:88]))
 			out.GuardFlags = binary.LittleEndian.Uint32(b[88:92])
 		}
-		if avail >= 136 {
-			out.CHPEMetadataPointer = uint64(binary.LittleEndian.Uint32(b[132:136]))
+		if avail >= 128 {
+			out.CHPEMetadataPointer = uint64(binary.LittleEndian.Uint32(b[124:128]))
 		}
 	}
 

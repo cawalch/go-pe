@@ -24,10 +24,10 @@ func (r RichAnomalies) Any() bool {
 
 // Rich inspects [pe.File.RichHeader] for checksum failures, non-zero DanS
 // padding, linker-version inconsistencies, and Rich headers embedded in
-// non-MSVC (e.g., Go, Rust, Nim, or MinGW DWARF) binaries.
+// non-MSVC (Go or MinGW DWARF) binaries.
 func Rich(f *pe.File, data []byte) (RichAnomalies, error) {
-	if f == nil {
-		return RichAnomalies{}, fmt.Errorf("%w: nil File", pe.ErrInvalidHeader)
+	if f == nil || (!f.Is32Bit() && !f.Is64Bit()) {
+		return RichAnomalies{}, fmt.Errorf("%w: file headers not parsed", pe.ErrInvalidHeader)
 	}
 	rh, err := f.RichHeader(data)
 	if err != nil {
@@ -55,7 +55,9 @@ func Rich(f *pe.File, data []byte) (RichAnomalies, error) {
 		}
 	}
 	if !out.SpoofedOnNonMSVC {
-		if rt, err := Runtime(f, data); err == nil && rt.Language != RuntimeUnknown {
+		// Windows MSVC Rust/Nim builds legitimately use MSVC link.exe and emit
+		// Rich headers, so only flag Go toolchains here alongside DWARF sections.
+		if rt, err := Runtime(f, data); err == nil && rt.Language == RuntimeGo {
 			out.SpoofedOnNonMSVC = true
 		}
 	}
@@ -91,8 +93,8 @@ var devPathMarkers = []string{
 // PDB inspects CodeView records from [pe.File.Debug] for all-zero GUIDs, zero
 // age, non-UTF-8 or control-character paths, and developer build-path leaks.
 func PDB(f *pe.File, data []byte) (PDBAnomalies, error) {
-	if f == nil {
-		return PDBAnomalies{}, fmt.Errorf("%w: nil File", pe.ErrInvalidHeader)
+	if f == nil || (!f.Is32Bit() && !f.Is64Bit()) {
+		return PDBAnomalies{}, fmt.Errorf("%w: file headers not parsed", pe.ErrInvalidHeader)
 	}
 	entries, err := f.Debug(data)
 	if err != nil {

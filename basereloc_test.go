@@ -50,6 +50,19 @@ func TestBaseRelocs(t *testing.T) {
 		t.Fatalf("unexpected BaseRelocs: %+v", br)
 	}
 
+	// HIGHADJ consumes the following 16-bit parameter word and should count as 1 active entry.
+	binary.LittleEndian.PutUint16(data[secOff+8:], (pe.RelocBasedHighAdj<<12)|0x10)
+	binary.LittleEndian.PutUint16(data[secOff+10:], 0x1234) // parameter word
+	binary.LittleEndian.PutUint16(data[secOff+12:], (pe.RelocBasedDir64<<12)|0x30)
+	binary.LittleEndian.PutUint16(data[secOff+14:], pe.RelocBasedAbsolute<<12)
+	brAdj, err := fBR.BaseRelocs(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if brAdj.ActiveEntries != 2 {
+		t.Fatalf("HIGHADJ ActiveEntries = %d, want 2", brAdj.ActiveEntries)
+	}
+
 	// Truncated block returns ErrInvalidBaseReloc.
 	binary.LittleEndian.PutUint32(data[dirOff+4:], 12)
 	fBad, err := pe.New(data)

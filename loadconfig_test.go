@@ -61,13 +61,28 @@ func TestLoadConfig(t *testing.T) {
 	binary.LittleEndian.PutUint32(data32[secOff32:], 160)
 	binary.LittleEndian.PutUint32(data32[secOff32+64:], 0x402000)
 	binary.LittleEndian.PutUint32(data32[secOff32+68:], 5)
+	binary.LittleEndian.PutUint32(data32[secOff32+124:], 0x403000) // CHPEMetadataPointer at 0x7C
 	f32LC, err := pe.New(data32)
 	if err != nil {
 		t.Fatal(err)
 	}
 	lc32, err := f32LC.LoadConfig(data32)
-	if err != nil || !lc32.HasSafeSEH() {
+	if err != nil || !lc32.HasSafeSEH() || !lc32.HasCHPE() || lc32.CHPEMetadataPointer != 0x403000 {
 		t.Fatalf("unexpected PE32 LoadConfig: (%+v, %v)", lc32, err)
+	}
+
+	// MSVC-style legacy DataDirectory.Size=64 with full struct declaredSize=256.
+	binary.LittleEndian.PutUint32(data64[dirOff+4:], 64)
+	fLegacy, err := pe.New(data64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lcLegacy, err := fLegacy.LoadConfig(data64)
+	if err != nil {
+		t.Fatalf("legacy dir.Size=64 LoadConfig err = %v", err)
+	}
+	if !lcLegacy.HasGuardCF() || !lcLegacy.HasCHPE() || lcLegacy.SecurityCookie != 0x140005000 {
+		t.Fatalf("legacy dir.Size=64 truncated fields: %+v", lcLegacy)
 	}
 
 	binary.LittleEndian.PutUint32(data64[dirOff+4:], 16)

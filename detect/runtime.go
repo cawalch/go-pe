@@ -2,7 +2,9 @@ package detect
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
+	"slices"
 
 	"github.com/cawalch/go-pe"
 )
@@ -38,11 +40,11 @@ type RuntimeMetadata struct {
 
 var goBuildInfoMagic = []byte("\xff Go buildinf:")
 
-// Runtime scans relevant PE sections (.rdata, .data, .text, .rustc, .gopclntab)
+// Runtime scans PE section bodies (up to [MaxRuntimeScanBytes] per section)
 // for Go, Rust, and Nim runtime markers without external dependencies.
 func Runtime(f *pe.File, data []byte) (RuntimeMetadata, error) {
-	if f == nil {
-		return RuntimeMetadata{}, fmt.Errorf("%w: nil File", pe.ErrInvalidHeader)
+	if f == nil || (!f.Is32Bit() && !f.Is64Bit()) {
+		return RuntimeMetadata{}, fmt.Errorf("%w: file headers not parsed", pe.ErrInvalidHeader)
 	}
 	if f.FileSize() < 0 || int64(len(data)) != f.FileSize() {
 		return RuntimeMetadata{}, fmt.Errorf("%w: input size %d does not match parsed file size %d", pe.ErrOutOfBounds, len(data), f.FileSize())
@@ -132,9 +134,9 @@ func extractGoVersion(buildInfo []byte) string {
 		return ""
 	}
 	if buildInfo[15]&2 != 0 {
-		vLen := int(buildInfo[32])
-		if vLen > 0 && vLen < 64 && 33+vLen <= len(buildInfo) {
-			return string(buildInfo[33 : 33+vLen])
+		vLen, n := binary.Uvarint(buildInfo[32:])
+		if n > 0 && vLen > 0 && vLen < 64 && uint64(32+n)+vLen <= uint64(len(buildInfo)) {
+			return string(buildInfo[32+n : 32+n+int(vLen)])
 		}
 	}
 	return ""
@@ -148,10 +150,8 @@ func hasGoPclntabMagic(b []byte) bool {
 }
 
 func appendUnique(dst []string, val string) []string {
-	for _, existing := range dst {
-		if existing == val {
-			return dst
-		}
+	if slices.Contains(dst, val) {
+		return dst
 	}
 	return append(dst, val)
 }
