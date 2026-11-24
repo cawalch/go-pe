@@ -14,12 +14,13 @@ const (
 	CLRFlagNativeEntryPoint uint32 = 0x00000010
 )
 
+const cliMetadataSignature uint32 = 0x424A5342 // "BSJB"
+
 const (
-	cliMetadataSignature uint32 = 0x424A5342 // "BSJB"
-	maxCLIVersionBytes          = 256
-	maxCLRStreams               = 64
-	clrHeaderMinSize            = 72
-	cliRootMinSize              = 16
+	maxCLIVersionBytes = 256
+	maxCLRStreams      = 64
+	clrHeaderMinSize   = 72
+	cliRootMinSize     = 16
 )
 
 var (
