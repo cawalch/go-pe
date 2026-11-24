@@ -44,7 +44,13 @@
 // unrecognized child blocks from a resource payload without flattening keys.
 // Use [File.RichHeader] to locate and decode Rich headers between the DOS
 // header and PE signature with explicit XOR keys, raw/clear byte spans,
-// (@comp.id, count) entries, and checksum status.
+// (@comp.id, count) entries, checksum status, and [RichHeader.MD5].
+// Use [File.TLS] to read TLS directory callback addresses, [File.CLR] to read
+// .NET CLR headers and CLI metadata streams, and [File.Exceptions] to read
+// PE32+ RUNTIME_FUNCTION records.
+// Use [ShannonEntropy], [File.SectionEntropy], and [File.OverlayEntropy] for
+// zero-allocation entropy measurement, and package detect for higher-level
+// heuristic anomaly checks.
 // Use [File.Debug] to read bounded IMAGE_DEBUG_DIRECTORY entries in file order
 // and decode CodeView RSDS/NB10 records (GUID/signature, age, and raw PDB path
 // bytes) while retaining non-CodeView entries as metadata.

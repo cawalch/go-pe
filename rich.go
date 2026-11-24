@@ -2,7 +2,9 @@ package pe
 
 import (
 	"bytes"
+	"crypto/md5" // #nosec G501 -- Rich header MD5 is standard for threat-intel clustering.
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math"
@@ -74,6 +76,17 @@ type RichHeader struct {
 	RawData          []byte
 	ClearData        []byte
 	Entries          []RichEntry
+}
+
+// MD5 returns the lowercase hexadecimal MD5 digest of r.ClearData (the
+// standard threat-intel Rich header hash), or "" when r is nil or ClearData is
+// empty.
+func (r *RichHeader) MD5() string {
+	if r == nil || len(r.ClearData) == 0 {
+		return ""
+	}
+	sum := md5.Sum(r.ClearData) // #nosec G401 -- Rich header MD5 is standard for threat-intel clustering.
+	return hex.EncodeToString(sum[:])
 }
 
 // RichHeader locates and decodes the Rich header from the DOS stub using f's
