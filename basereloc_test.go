@@ -36,7 +36,7 @@ func TestBaseRelocs(t *testing.T) {
 	binary.LittleEndian.PutUint16(data[secOff+8:], (pe.RelocBasedDir64<<12)|0x10)
 	binary.LittleEndian.PutUint16(data[secOff+10:], (pe.RelocBasedDir64<<12)|0x20)
 	binary.LittleEndian.PutUint16(data[secOff+12:], (pe.RelocBasedDir64<<12)|0x30)
-	binary.LittleEndian.PutUint16(data[secOff+14:], (pe.RelocBasedAbsolute<<12)|0x00)
+	binary.LittleEndian.PutUint16(data[secOff+14:], pe.RelocBasedAbsolute<<12)
 
 	fBR, err := pe.New(data)
 	if err != nil {
