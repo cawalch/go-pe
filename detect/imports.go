@@ -2,7 +2,6 @@ package detect
 
 import (
 	"fmt"
-	"math"
 	"strings"
 
 	"github.com/cawalch/go-pe"
@@ -161,10 +160,7 @@ func hasHighEntropyNonDebugSection(f *pe.File, data []byte, threshold float64) b
 	}
 	for i := range f.Sections {
 		sec := &f.Sections[i]
-		if sec.SizeOfRawData == 0 {
-			continue
-		}
-		if strings.HasPrefix(sec.Name, ".zdebug_") || strings.HasPrefix(sec.Name, ".debug_") {
+		if sec.SizeOfRawData == 0 || isDebugSectionName(sec.Name) {
 			continue
 		}
 		start := uint64(sec.PointerToRawData)
@@ -172,29 +168,9 @@ func hasHighEntropyNonDebugSection(f *pe.File, data []byte, threshold float64) b
 		if end > uint64(len(data)) {
 			continue
 		}
-		if rawShannonEntropy(data[start:end]) >= threshold {
+		if pe.ShannonEntropy(data[start:end]) >= threshold {
 			return true
 		}
 	}
 	return false
-}
-
-func rawShannonEntropy(b []byte) float64 {
-	if len(b) == 0 {
-		return 0
-	}
-	var counts [256]uint64
-	for _, v := range b {
-		counts[v]++
-	}
-	total := float64(len(b))
-	var ent float64
-	for _, c := range counts {
-		if c == 0 {
-			continue
-		}
-		p := float64(c) / total
-		ent -= p * math.Log2(p)
-	}
-	return ent
 }

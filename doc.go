@@ -25,8 +25,7 @@
 // which returns [ErrNoImports] or false rather than md5("") when no symbols exist.
 // Use [File.LoadConfig] to read load configuration metadata (SafeSEH,
 // SecurityCookie, GuardCF, CHPE) and [File.BaseRelocs] to read base relocation
-// blocks. Package detect provides higher-level heuristic anomaly checks outside
-// the core parser.
+// blocks.
 // Use [File.Exports] to read export metadata, address slots, aliases, and forwarders
 // under separate table and string limits. Use [File.Certificates] and
 // [File.CertificatePayload] to enumerate bounded WIN_CERTIFICATE records and copy
@@ -49,7 +48,13 @@
 // unrecognized child blocks from a resource payload without flattening keys.
 // Use [File.RichHeader] to locate and decode Rich headers between the DOS
 // header and PE signature with explicit XOR keys, raw/clear byte spans,
-// (@comp.id, count) entries, and checksum status.
+// (@comp.id, count) entries, checksum status, and [RichHeader.MD5].
+// Use [File.TLS] to read TLS directory callback addresses, [File.CLR] to read
+// .NET CLR headers and CLI metadata streams, and [File.Exceptions] to read
+// PE32+ RUNTIME_FUNCTION records.
+// Use [ShannonEntropy], [File.SectionEntropy], and [File.OverlayEntropy] for
+// zero-allocation entropy measurement, and package detect for higher-level
+// heuristic anomaly checks.
 // Use [File.Debug] to read bounded IMAGE_DEBUG_DIRECTORY entries in file order
 // and decode CodeView RSDS/NB10 records (GUID/signature, age, and raw PDB path
 // bytes) while retaining non-CodeView entries as metadata.

@@ -127,7 +127,9 @@ for individual types and methods.
 | Read delayed imports | `File.DelayImports` | [Delayed imports](docs/parsing.md#read-delayed-imports) |
 | Read exports and forwarders | `File.Exports` | [Exports](docs/parsing.md#read-standard-exports) |
 | Read resources and version information | `File.Resources`, `File.ResourcePayload`, `ParseVersionInfo` | [Version information](docs/parsing.md#parse-version-information-resources) |
-| Decode Rich headers | `File.RichHeader` | [Rich headers](docs/parsing.md#decode-rich-headers) |
+| Decode Rich headers | `File.RichHeader`, `RichHeader.MD5` | [Rich headers](docs/parsing.md#decode-rich-headers) |
+| Read TLS, CLR (.NET), and exception directories | `File.TLS`, `File.CLR`, `File.Exceptions` | [Parsing guide](docs/parsing.md#additional-directories-and-entropy) |
+| Measure section and overlay entropy | `ShannonEntropy`, `File.SectionEntropy`, `File.OverlayEntropy` | [Parsing guide](docs/parsing.md#additional-directories-and-entropy) |
 | Read debug records | `File.Debug` | [Debug records](docs/parsing.md#read-debug-directories-and-codeview-records) |
 | Read attribute certificates | `File.Certificates`, `File.CertificatePayload` | [Certificates](docs/parsing.md#read-attribute-certificates) |
 | Parse Authenticode signatures | `File.AuthenticodeSignatures`, `ParseAuthenticodeSignatures` | [API reference](https://pkg.go.dev/github.com/cawalch/go-pe#File.AuthenticodeSignatures) |

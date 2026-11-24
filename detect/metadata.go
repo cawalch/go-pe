@@ -49,7 +49,7 @@ func Rich(f *pe.File, data []byte) (RichAnomalies, error) {
 	}
 
 	for i := range f.Sections {
-		if strings.HasPrefix(f.Sections[i].Name, ".zdebug_") || strings.HasPrefix(f.Sections[i].Name, ".debug_") {
+		if isDebugSectionName(f.Sections[i].Name) {
 			out.SpoofedOnNonMSVC = true
 			break
 		}
