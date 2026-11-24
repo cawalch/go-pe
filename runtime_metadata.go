@@ -1,0 +1,166 @@
+package pe
+
+import (
+	"bytes"
+	"fmt"
+)
+
+// MaxRuntimeScanBytes limits the maximum bytes scanned per section by
+// [File.DetectRuntime].
+const MaxRuntimeScanBytes = 32 << 20
+
+// RuntimeLanguage identifies the detected compiled language runtime.
+type RuntimeLanguage string
+
+const (
+	RuntimeUnknown RuntimeLanguage = ""
+	RuntimeGo      RuntimeLanguage = "go"
+	RuntimeRust    RuntimeLanguage = "rust"
+	RuntimeNim     RuntimeLanguage = "nim"
+)
+
+// GoRuntimeInfo holds Go-specific PE runtime metadata and obfuscation signals.
+type GoRuntimeInfo struct {
+	HasBuildInfo   bool
+	Version        string
+	HasGoPclntab   bool
+	PossibleGarble bool
+}
+
+// RuntimeMetadata summarizes detected Go, Rust, or Nim runtime markers.
+type RuntimeMetadata struct {
+	Language    RuntimeLanguage
+	Go          *GoRuntimeInfo
+	RustMarkers []string
+	NimMarkers  []string
+}
+
+var goBuildInfoMagic = []byte("\xff Go buildinf:")
+
+// DetectRuntime scans relevant PE sections (.rdata, .data, .text, .rustc,
+// .gopclntab) for Go, Rust, and Nim runtime markers without external
+// dependencies.
+func (f *File) DetectRuntime(data []byte) (RuntimeMetadata, error) {
+	if err := f.validateParsedHeaders(); err != nil {
+		return RuntimeMetadata{}, err
+	}
+	if f.fileSize < 0 || int64(len(data)) != f.fileSize {
+		return RuntimeMetadata{}, fmt.Errorf("%w: input size %d does not match parsed file size %d", ErrOutOfBounds, len(data), f.fileSize)
+	}
+
+	var out RuntimeMetadata
+	var goInfo GoRuntimeInfo
+	var hasGoSymbolHint bool
+
+	for i := range f.Sections {
+		sec := &f.Sections[i]
+		if sec.SizeOfRawData == 0 {
+			continue
+		}
+		start := uint64(sec.PointerToRawData)
+		end := start + uint64(sec.SizeOfRawData)
+		if end > uint64(len(data)) {
+			continue
+		}
+		if sec.SizeOfRawData > MaxRuntimeScanBytes {
+			end = start + MaxRuntimeScanBytes
+		}
+		body := data[start:end]
+
+		if sec.Name == ".rustc" {
+			out.RustMarkers = appendUnique(out.RustMarkers, ".rustc")
+		}
+		if sec.Name == ".gopclntab" {
+			goInfo.HasGoPclntab = true
+		}
+
+		if idx := bytes.Index(body, goBuildInfoMagic); idx >= 0 {
+			goInfo.HasBuildInfo = true
+			if ver := extractGoVersion(body[idx:]); ver != "" {
+				goInfo.Version = ver
+			}
+		}
+		if bytes.Contains(body, []byte("runtime.main")) || bytes.Contains(body, []byte("runtime.gopanic")) {
+			hasGoSymbolHint = true
+		}
+		if bytes.Contains(body, []byte("Go pclntab")) || hasGoPclntabMagic(body) {
+			goInfo.HasGoPclntab = true
+		}
+
+		// Rust markers.
+		if bytes.Contains(body, []byte("panicked at")) {
+			out.RustMarkers = appendUnique(out.RustMarkers, "panicked at")
+		}
+		if bytes.Contains(body, []byte(`library\core\src\`)) || bytes.Contains(body, []byte("library/core/src/")) {
+			out.RustMarkers = appendUnique(out.RustMarkers, "library/core/src")
+		}
+		if bytes.Contains(body, []byte(`.cargo\registry`)) || bytes.Contains(body, []byte(".cargo/registry")) {
+			out.RustMarkers = appendUnique(out.RustMarkers, ".cargo/registry")
+		}
+
+		// Nim markers.
+		if bytes.Contains(body, []byte("nimMain")) {
+			out.NimMarkers = appendUnique(out.NimMarkers, "nimMain")
+		}
+		if bytes.Contains(body, []byte("stdlib_system.nim")) {
+			out.NimMarkers = appendUnique(out.NimMarkers, "stdlib_system.nim")
+		}
+		if bytes.Contains(body, []byte(".nim.c")) {
+			out.NimMarkers = appendUnique(out.NimMarkers, ".nim.c")
+		}
+	}
+
+	if goInfo.HasBuildInfo || goInfo.HasGoPclntab || hasGoSymbolHint {
+		if (goInfo.HasGoPclntab || hasGoSymbolHint) && !goInfo.HasBuildInfo {
+			goInfo.PossibleGarble = true
+		}
+		out.Go = &goInfo
+		out.Language = RuntimeGo
+		return out, nil
+	}
+	if len(out.RustMarkers) > 0 {
+		out.Language = RuntimeRust
+		return out, nil
+	}
+	if len(out.NimMarkers) > 0 {
+		out.Language = RuntimeNim
+		return out, nil
+	}
+	return out, nil
+}
+
+func extractGoVersion(buildInfo []byte) string {
+	// Go 1.18+ inline buildinfo: magic (14B) + ptrSize (1B) + endianFlags (1B) +
+	// inline varint-prefixed version string at offset 32 when flags&2 != 0.
+	if len(buildInfo) < 34 {
+		return ""
+	}
+	flags := buildInfo[15]
+	if flags&2 != 0 {
+		vLen := int(buildInfo[32])
+		if vLen > 0 && vLen < 64 && 33+vLen <= len(buildInfo) {
+			return string(buildInfo[33 : 33+vLen])
+		}
+	}
+	return ""
+}
+
+func hasGoPclntabMagic(b []byte) bool {
+	// Go 1.20+ pclntab magic: f1 ff ff ff 00 00 (LE: 0xfffffff1)
+	// Go 1.18-1.19:           f0 ff ff ff 00 00
+	// Go 1.16-1.17:           fa ff ff ff 00 00
+	// Go 1.2-1.15:            fb ff ff ff 00 00
+	return bytes.Contains(b, []byte{0xf1, 0xff, 0xff, 0xff, 0x00, 0x00}) ||
+		bytes.Contains(b, []byte{0xf0, 0xff, 0xff, 0xff, 0x00, 0x00}) ||
+		bytes.Contains(b, []byte{0xfa, 0xff, 0xff, 0xff, 0x00, 0x00}) ||
+		bytes.Contains(b, []byte{0xfb, 0xff, 0xff, 0xff, 0x00, 0x00})
+}
+
+func appendUnique(dst []string, val string) []string {
+	for _, existing := range dst {
+		if existing == val {
+			return dst
+		}
+	}
+	return append(dst, val)
+}
