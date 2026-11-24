@@ -26,7 +26,7 @@ func TestShannonEntropy(t *testing.T) {
 	}
 }
 
-func TestSectionDataAndEntropy(t *testing.T) {
+func TestSectionAndOverlayEntropy(t *testing.T) {
 	data := testfixture.Minimal(true, 2)
 	f, err := pe.New(data)
 	if err != nil {
@@ -36,19 +36,6 @@ func TestSectionDataAndEntropy(t *testing.T) {
 	sec0 := f.Sections[0]
 	for i := range int(sec0.SizeOfRawData) {
 		data[int(sec0.PointerToRawData)+i] = byte(i)
-	}
-
-	gotBytes, err := f.SectionData(data, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(gotBytes) != int(sec0.SizeOfRawData) {
-		t.Fatalf("SectionData len = %d, want %d", len(gotBytes), sec0.SizeOfRawData)
-	}
-	// Mutating returned slice must not affect caller buffer.
-	gotBytes[0] ^= 0xff
-	if data[sec0.PointerToRawData] == gotBytes[0] {
-		t.Fatal("SectionData aliased caller buffer")
 	}
 
 	ent, err := f.SectionEntropy(data, 0)
@@ -64,14 +51,13 @@ func TestSectionDataAndEntropy(t *testing.T) {
 		t.Fatalf("SectionEntropy(1) = (%v, %v), want (0, nil)", ent1, err)
 	}
 
-	if _, err := f.SectionData(data, -1); !errors.Is(err, pe.ErrOutOfBounds) {
-		t.Fatalf("SectionData(-1) err = %v, want ErrOutOfBounds", err)
+	if _, err := f.SectionEntropy(data, -1); !errors.Is(err, pe.ErrOutOfBounds) {
+		t.Fatalf("SectionEntropy(-1) err = %v, want ErrOutOfBounds", err)
 	}
-	if _, err := f.SectionData(data, 2); !errors.Is(err, pe.ErrOutOfBounds) {
-		t.Fatalf("SectionData(2) err = %v, want ErrOutOfBounds", err)
+	if _, err := f.SectionEntropy(data, 2); !errors.Is(err, pe.ErrOutOfBounds) {
+		t.Fatalf("SectionEntropy(2) err = %v, want ErrOutOfBounds", err)
 	}
 
-	// Overlay entropy check.
 	if _, ok, err := f.OverlayEntropy(data); err != nil || ok {
 		t.Fatalf("OverlayEntropy(no overlay) = (%v, %v), want (false, nil)", ok, err)
 	}

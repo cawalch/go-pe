@@ -1,14 +1,9 @@
 package pe
 
 import (
-	"bytes"
 	"fmt"
 	"math"
 )
-
-// MaxSectionDataBytes limits the maximum raw section slice copied by
-// [File.SectionData].
-const MaxSectionDataBytes = MaxAuthenticodeDigestBytes
 
 // ShannonEntropy computes the Shannon entropy of data in bits per byte
 // ([0.0, 8.0]) without heap allocations. Returns 0 for an empty slice.
@@ -52,24 +47,6 @@ func (f *File) sectionRawBounds(data []byte, index int) (uint64, uint64, error) 
 		return 0, 0, fmt.Errorf("%w: section %d raw range [%#x, %#x) exceeds input size %d", ErrOutOfBounds, index, start, end, len(data))
 	}
 	return start, end, nil
-}
-
-// SectionData returns a newly allocated copy of the raw bytes for section
-// index, validating header state, input length, [MaxSectionDataBytes], and raw
-// file bounds. Returns nil, nil when SizeOfRawData is zero.
-func (f *File) SectionData(data []byte, index int) ([]byte, error) {
-	start, end, err := f.sectionRawBounds(data, index)
-	if err != nil {
-		return nil, err
-	}
-	if start == end {
-		return nil, nil
-	}
-	size := end - start
-	if size > MaxSectionDataBytes {
-		return nil, fmt.Errorf("%w: section %d raw size %d exceeds %d", ErrOutOfBounds, index, size, MaxSectionDataBytes)
-	}
-	return bytes.Clone(data[start:end]), nil
 }
 
 // SectionEntropy computes the Shannon entropy ([0.0, 8.0] bits/byte) of the

@@ -63,18 +63,3 @@ func (f *File) Exceptions(data []byte) ([]RuntimeFunction, error) {
 	}
 	return entries, nil
 }
-
-// MissingPE32PlusExceptionTable reports whether f is a PE32+ image lacking a
-// declared [DataDirectoryException] (.pdata) table. Standard Windows/Go PE32+
-// executables emit .pdata for stack unwinding; its absence is a common signal
-// for packed, shellcode-wrapped, or hand-crafted PE32+ binaries.
-func (f *File) MissingPE32PlusExceptionTable() bool {
-	if !f.Is64Bit() {
-		return false
-	}
-	if f.OptionalHeader.NumberOfRvaAndSizes <= DataDirectoryException {
-		return true
-	}
-	dir := f.OptionalHeader.DataDirectories[DataDirectoryException]
-	return dir.VirtualAddress == 0 || dir.Size == 0
-}

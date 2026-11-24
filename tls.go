@@ -18,7 +18,7 @@ var (
 )
 
 // TLSDirectory describes the IMAGE_TLS_DIRECTORY32 or IMAGE_TLS_DIRECTORY64
-// structure and its decoded callback addresses.
+// structure and its decoded callback virtual addresses.
 type TLSDirectory struct {
 	StartAddressOfRawData uint64
 	EndAddressOfRawData   uint64
@@ -27,7 +27,6 @@ type TLSDirectory struct {
 	SizeOfZeroFill        uint32
 	Characteristics       uint32
 	Callbacks             []uint64
-	CallbackRVAs          []uint32
 }
 
 // TLS reads the Thread Local Storage directory ([DataDirectoryTLS], index 9)
@@ -107,12 +106,10 @@ func (f *File) TLS(data []byte) (*TLSDirectory, error) {
 		if len(out.Callbacks) >= MaxTLSCallbacks {
 			return nil, ErrTLSLimit
 		}
-		cbRVA, err := vaToRVA(va, f.OptionalHeader.ImageBase)
-		if err != nil {
+		if _, err := vaToRVA(va, f.OptionalHeader.ImageBase); err != nil {
 			return nil, fmt.Errorf("%w: callback %d VA %#x: %w", ErrInvalidTLS, len(out.Callbacks), va, err)
 		}
 		out.Callbacks = append(out.Callbacks, va)
-		out.CallbackRVAs = append(out.CallbackRVAs, cbRVA)
 	}
 
 	return &out, nil

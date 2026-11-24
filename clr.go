@@ -7,26 +7,19 @@ import (
 	"fmt"
 )
 
-// CLIMetadataSignature is the "BSJB" magic value starting a .NET CLI metadata root.
-const CLIMetadataSignature uint32 = 0x424A5342
-
-// .NET IMAGE_COR20_HEADER flags (COMIMAGE_FLAGS_*).
+// .NET IMAGE_COR20_HEADER flags used for IL-only / mixed-mode classification.
 const (
 	CLRFlagILOnly           uint32 = 0x00000001
-	CLRFlag32BitRequired    uint32 = 0x00000002
-	CLRFlagILLibrary        uint32 = 0x00000004
 	CLRFlagStrongNameSigned uint32 = 0x00000008
 	CLRFlagNativeEntryPoint uint32 = 0x00000010
-	CLRFlagTrackDebugData   uint32 = 0x00010000
-	CLRFlag32BitPreferred   uint32 = 0x00020000
 )
 
-// Parser limits bounding .NET CLR metadata decoding.
 const (
-	MaxCLIVersionBytes = 256
-	MaxCLRStreams      = 64
-	clrHeaderMinSize   = 72
-	cliRootMinSize     = 16
+	cliMetadataSignature uint32 = 0x424A5342 // "BSJB"
+	maxCLIVersionBytes          = 256
+	maxCLRStreams               = 64
+	clrHeaderMinSize            = 72
+	cliRootMinSize              = 16
 )
 
 var (
@@ -65,15 +58,6 @@ type CLRHeader struct {
 	VersionString string
 	MetadataFlags uint16
 	Streams       []CLRStreamHeader
-}
-
-// IsMixedMode reports whether the .NET assembly contains native code or a
-// native entry point rather than being pure IL.
-func (c *CLRHeader) IsMixedMode() bool {
-	if c == nil {
-		return false
-	}
-	return c.Flags&CLRFlagILOnly == 0 || c.Flags&CLRFlagNativeEntryPoint != 0
 }
 
 // CLR reads the .NET CLR runtime header ([DataDirectoryCLRRuntime], index 14)
@@ -147,16 +131,15 @@ func (f *File) parseCLIMetadata(data []byte, out *CLRHeader) error {
 	meta := span[:out.MetaData.Size]
 
 	sig := binary.LittleEndian.Uint32(meta[0:4])
-	if sig != CLIMetadataSignature {
+	if sig != cliMetadataSignature {
 		return fmt.Errorf("%w: invalid CLI metadata signature %#x", ErrInvalidCLR, sig)
 	}
 	out.HasMetadata = true
 	out.MetadataMajor = binary.LittleEndian.Uint16(meta[4:6])
 	out.MetadataMinor = binary.LittleEndian.Uint16(meta[6:8])
-	// meta[8:12] is reserved.
 	verLen := binary.LittleEndian.Uint32(meta[12:16])
-	if verLen > MaxCLIVersionBytes {
-		return fmt.Errorf("%w: CLI version string length %d exceeds %d", ErrCLRLimit, verLen, MaxCLIVersionBytes)
+	if verLen > maxCLIVersionBytes {
+		return fmt.Errorf("%w: CLI version string length %d exceeds %d", ErrCLRLimit, verLen, maxCLIVersionBytes)
 	}
 	paddedVerLen := (uint64(verLen) + 3) &^ 3
 	if uint64(16)+paddedVerLen+4 > uint64(len(meta)) {
@@ -171,8 +154,8 @@ func (f *File) parseCLIMetadata(data []byte, out *CLRHeader) error {
 	pos := int(16 + paddedVerLen)
 	out.MetadataFlags = binary.LittleEndian.Uint16(meta[pos : pos+2])
 	streamCount := binary.LittleEndian.Uint16(meta[pos+2 : pos+4])
-	if int(streamCount) > MaxCLRStreams {
-		return fmt.Errorf("%w: CLI stream count %d exceeds %d", ErrCLRLimit, streamCount, MaxCLRStreams)
+	if int(streamCount) > maxCLRStreams {
+		return fmt.Errorf("%w: CLI stream count %d exceeds %d", ErrCLRLimit, streamCount, maxCLRStreams)
 	}
 	pos += 4
 

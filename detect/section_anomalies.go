@@ -1,12 +1,17 @@
-package pe
+// Package detect implements higher-level PE detection heuristics on top of
+// github.com/cawalch/go-pe without adding scanner policy to the core parser.
+package detect
 
 import (
+	"fmt"
 	"strings"
 	"time"
+
+	"github.com/cawalch/go-pe"
 )
 
 // DefaultHighEntropyThreshold is the default Shannon entropy threshold (bits/byte)
-// used by [File.SectionAnomalies] to flag packed or encrypted sections.
+// used by [Sections] to flag packed or encrypted sections.
 const DefaultHighEntropyThreshold = 7.2
 
 // SectionEntropyInfo identifies a section whose raw byte entropy met or
@@ -17,8 +22,8 @@ type SectionEntropyInfo struct {
 	Entropy float64
 }
 
-// AnomalyOptions configures [File.SectionAnomalies].
-type AnomalyOptions struct {
+// SectionOptions configures [Sections].
+type SectionOptions struct {
 	// HighEntropyThreshold sets the Shannon entropy threshold in bits/byte.
 	// When <= 0, [DefaultHighEntropyThreshold] (7.2) is used.
 	HighEntropyThreshold float64
@@ -28,6 +33,11 @@ type AnomalyOptions struct {
 	// By default they are excluded to avoid false positives on unstripped Go
 	// and MinGW binaries.
 	IncludeDebugSections bool
+
+	// VerificationTime pins the reference time for future-timestamp checks.
+	// When zero, the future-timestamp check is skipped (0xFFFFFFFF is still
+	// flagged unless DebugTypeRepro is present).
+	VerificationTime time.Time
 }
 
 // SectionAnomalies reports section-level, entry-point, overlay, and timestamp
@@ -60,8 +70,8 @@ func (a SectionAnomalies) Any() bool {
 		a.SuspiciousTimeDateStamp
 }
 
-// SectionAnomalies inspects f's section headers, entry point, raw section
-// entropies, overlay entropy, and COFF timestamp against data.
+// Sections inspects f's section headers, entry point, raw section entropies,
+// overlay entropy, and COFF timestamp against data.
 //
 // Built-in false-positive guards:
 //   - Compressed DWARF debug sections (".zdebug_*", ".debug_*") are excluded
@@ -71,17 +81,19 @@ func (a SectionAnomalies) Any() bool {
 //     false positives.
 //   - TimeDateStamp == 0 is recorded in ZeroTimeDateStamp but does not set
 //     SuspiciousTimeDateStamp or Any().
-func (f *File) SectionAnomalies(data []byte, opts *AnomalyOptions) (SectionAnomalies, error) {
-	if err := f.validateParsedHeaders(); err != nil {
-		return SectionAnomalies{}, err
+func Sections(f *pe.File, data []byte, opts *SectionOptions) (SectionAnomalies, error) {
+	if f == nil {
+		return SectionAnomalies{}, fmt.Errorf("%w: nil File", pe.ErrInvalidHeader)
 	}
 	threshold := DefaultHighEntropyThreshold
 	includeDebug := false
+	var verifyTime time.Time
 	if opts != nil {
 		if opts.HighEntropyThreshold > 0 {
 			threshold = opts.HighEntropyThreshold
 		}
 		includeDebug = opts.IncludeDebugSections
+		verifyTime = opts.VerificationTime
 	}
 
 	var out SectionAnomalies
@@ -90,10 +102,10 @@ func (f *File) SectionAnomalies(data []byte, opts *AnomalyOptions) (SectionAnoma
 
 	for i := range f.Sections {
 		sec := &f.Sections[i]
-		isExec := sec.Characteristics&SectionMemExecute != 0
-		isWrite := sec.Characteristics&SectionMemWrite != 0
-		isRead := sec.Characteristics&SectionMemRead != 0
-		isCode := sec.Characteristics&SectionCntCode != 0
+		isExec := sec.Characteristics&pe.SectionMemExecute != 0
+		isWrite := sec.Characteristics&pe.SectionMemWrite != 0
+		isRead := sec.Characteristics&pe.SectionMemRead != 0
+		isCode := sec.Characteristics&pe.SectionCntCode != 0
 
 		if isRead && isWrite && isExec {
 			out.RWXSections = append(out.RWXSections, i)
@@ -148,8 +160,8 @@ func (f *File) SectionAnomalies(data []byte, opts *AnomalyOptions) (SectionAnoma
 	ts := f.FileHeader.TimeDateStamp
 	if ts == 0 {
 		out.ZeroTimeDateStamp = true
-	} else if ts == 0xFFFFFFFF || int64(ts) > time.Now().Add(24*time.Hour).Unix() {
-		if !f.hasReproDebugEntry(data) {
+	} else if ts == 0xFFFFFFFF || (!verifyTime.IsZero() && int64(ts) > verifyTime.Add(24*time.Hour).Unix()) {
+		if !hasReproDebugEntry(f, data) {
 			out.SuspiciousTimeDateStamp = true
 		}
 	}
@@ -161,7 +173,7 @@ func isDebugSectionName(name string) bool {
 	return strings.HasPrefix(name, ".zdebug_") || strings.HasPrefix(name, ".debug_")
 }
 
-func isVirtualSizeAnomalous(sec *Section, isExec bool) bool {
+func isVirtualSizeAnomalous(sec *pe.Section, isExec bool) bool {
 	if sec.VirtualSize <= sec.SizeOfRawData {
 		return false
 	}
@@ -172,14 +184,13 @@ func isVirtualSizeAnomalous(sec *Section, isExec bool) bool {
 	if sec.SizeOfRawData > 0 && uint64(sec.VirtualSize) < uint64(sec.SizeOfRawData)*4 {
 		return false
 	}
-	// Suppress uninitialized BSS expansion in standard non-executable data sections.
 	if !isExec && (sec.Name == ".data" || sec.Name == ".bss") {
 		return false
 	}
 	return true
 }
 
-func rvaInSection(rva uint32, sec *Section) bool {
+func rvaInSection(rva uint32, sec *pe.Section) bool {
 	vSize := max(sec.VirtualSize, sec.SizeOfRawData)
 	if vSize == 0 || rva < sec.VirtualAddress {
 		return false
@@ -187,13 +198,13 @@ func rvaInSection(rva uint32, sec *Section) bool {
 	return uint64(rva)-uint64(sec.VirtualAddress) < uint64(vSize)
 }
 
-func (f *File) hasReproDebugEntry(data []byte) bool {
+func hasReproDebugEntry(f *pe.File, data []byte) bool {
 	entries, err := f.Debug(data)
 	if err != nil {
 		return false
 	}
 	for i := range entries {
-		if entries[i].Type == DebugTypeRepro {
+		if entries[i].Type == pe.DebugTypeRepro {
 			return true
 		}
 	}
