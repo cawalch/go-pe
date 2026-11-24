@@ -10,7 +10,10 @@ import (
 // by [File.Exceptions].
 const MaxExceptionEntries = 65536
 
-const runtimeFunctionSize = 12
+const (
+	runtimeFunctionSizeX64 = 12
+	runtimeFunctionSizeARM = 8
+)
 
 var (
 	// ErrInvalidException indicates malformed or misaligned exception directory metadata.
@@ -19,8 +22,9 @@ var (
 	ErrExceptionLimit = errors.New("exception directory parser limit exceeded")
 )
 
-// RuntimeFunction represents one 12-byte IMAGE_RUNTIME_FUNCTION_ENTRY record
-// from the exception directory (.pdata).
+// RuntimeFunction represents one IMAGE_RUNTIME_FUNCTION_ENTRY record from the
+// exception directory (.pdata). For ARM, ARM64, and ARM64EC images (8-byte
+// entries), EndAddress is zero.
 type RuntimeFunction struct {
 	BeginAddress uint32
 	EndAddress   uint32
@@ -28,7 +32,8 @@ type RuntimeFunction struct {
 }
 
 // Exceptions reads the exception directory ([DataDirectoryException], index 3)
-// as 12-byte RUNTIME_FUNCTION entries.
+// as RUNTIME_FUNCTION entries (8-byte entries for ARM/ARM64/ARM64EC images,
+// 12-byte entries for x64 and other architectures).
 //
 // A missing directory returns nil, nil. Misaligned, truncated, or over-limit
 // metadata returns nil and an error.
@@ -37,10 +42,15 @@ func (f *File) Exceptions(data []byte) ([]RuntimeFunction, error) {
 	if err != nil || !ok {
 		return nil, err
 	}
-	if dir.Size%runtimeFunctionSize != 0 {
+	entrySize := uint32(runtimeFunctionSizeX64)
+	switch f.FileHeader.Machine {
+	case MachineARMNT, MachineARM64, MachineARM64EC:
+		entrySize = runtimeFunctionSizeARM
+	}
+	if dir.Size%entrySize != 0 {
 		return nil, fmt.Errorf("%w: misaligned exception directory size %d", ErrInvalidException, dir.Size)
 	}
-	count := dir.Size / runtimeFunctionSize
+	count := dir.Size / entrySize
 	if count > MaxExceptionEntries {
 		return nil, ErrExceptionLimit
 	}
@@ -54,11 +64,18 @@ func (f *File) Exceptions(data []byte) ([]RuntimeFunction, error) {
 
 	entries := make([]RuntimeFunction, count)
 	for i := range count {
-		off := int(i) * runtimeFunctionSize
-		entries[i] = RuntimeFunction{
-			BeginAddress: binary.LittleEndian.Uint32(span[off : off+4]),
-			EndAddress:   binary.LittleEndian.Uint32(span[off+4 : off+8]),
-			UnwindData:   binary.LittleEndian.Uint32(span[off+8 : off+12]),
+		off := int(i) * int(entrySize)
+		if entrySize == runtimeFunctionSizeARM {
+			entries[i] = RuntimeFunction{
+				BeginAddress: binary.LittleEndian.Uint32(span[off : off+4]),
+				UnwindData:   binary.LittleEndian.Uint32(span[off+4 : off+8]),
+			}
+		} else {
+			entries[i] = RuntimeFunction{
+				BeginAddress: binary.LittleEndian.Uint32(span[off : off+4]),
+				EndAddress:   binary.LittleEndian.Uint32(span[off+4 : off+8]),
+				UnwindData:   binary.LittleEndian.Uint32(span[off+8 : off+12]),
+			}
 		}
 	}
 	return entries, nil

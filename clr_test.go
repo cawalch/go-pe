@@ -83,3 +83,51 @@ func TestCLRHeaderAndMetadata(t *testing.T) {
 		t.Fatalf("bad BSJB err = %v, want ErrInvalidCLR", err)
 	}
 }
+
+func TestCLRBoundsAndLimits(t *testing.T) {
+	// Incomplete MetaData descriptor (non-zero VA, zero size).
+	data := testfixture.Minimal(true, 1)
+	f, err := pe.New(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secOff := int(f.Sections[0].PointerToRawData)
+	secRVA := f.Sections[0].VirtualAddress
+	dirOff := 152 + 112 + pe.DataDirectoryCLRRuntime*8
+	binary.LittleEndian.PutUint32(data[dirOff:], secRVA)
+	binary.LittleEndian.PutUint32(data[dirOff+4:], 72)
+	binary.LittleEndian.PutUint32(data[secOff:], 72)
+	binary.LittleEndian.PutUint32(data[secOff+8:], secRVA+128) // MetaData VA
+	binary.LittleEndian.PutUint32(data[secOff+12:], 0)         // MetaData Size = 0
+
+	fInc, err := pe.New(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fInc.CLR(data); !errors.Is(err, pe.ErrInvalidCLR) {
+		t.Fatalf("incomplete MetaData err = %v, want ErrInvalidCLR", err)
+	}
+
+	// Overlong stream name (exceeds 256 bytes without NUL terminator).
+	metaRVA := secRVA + 128
+	metaOff := secOff + 128
+	metaSize := 320
+	binary.LittleEndian.PutUint32(data[secOff+8:], metaRVA)
+	binary.LittleEndian.PutUint32(data[secOff+12:], uint32(metaSize))
+	binary.LittleEndian.PutUint32(data[metaOff:], 0x424A5342) // "BSJB"
+	binary.LittleEndian.PutUint32(data[metaOff+12:], 4)       // verLen = 4
+	copy(data[metaOff+16:], "v4\x00\x00")
+	binary.LittleEndian.PutUint16(data[metaOff+20:], 0) // flags
+	binary.LittleEndian.PutUint16(data[metaOff+22:], 1) // 1 stream
+	// Stream header at metaOff+24 (8 bytes offset/size), then non-NUL name bytes.
+	for i := metaOff + 32; i < metaOff+metaSize; i++ {
+		data[i] = 'A'
+	}
+	fLim, err := pe.New(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fLim.CLR(data); !errors.Is(err, pe.ErrCLRLimit) {
+		t.Fatalf("overlong stream name err = %v, want ErrCLRLimit", err)
+	}
+}

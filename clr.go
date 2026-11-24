@@ -17,10 +17,11 @@ const (
 const cliMetadataSignature uint32 = 0x424A5342 // "BSJB"
 
 const (
-	maxCLIVersionBytes = 256
-	maxCLRStreams      = 64
-	clrHeaderMinSize   = 72
-	cliRootMinSize     = 16
+	maxCLIVersionBytes    = 256
+	maxCLRStreams         = 64
+	maxCLRStreamNameBytes = 256
+	clrHeaderMinSize      = 72
+	cliRootMinSize        = 16
 )
 
 var (
@@ -102,7 +103,10 @@ func (f *File) CLR(data []byte) (*CLRHeader, error) {
 		ManagedNativeHeader:     readDataDir(span[64:72]),
 	}
 
-	if out.MetaData.VirtualAddress != 0 && out.MetaData.Size != 0 {
+	if out.MetaData.VirtualAddress != 0 || out.MetaData.Size != 0 {
+		if out.MetaData.VirtualAddress == 0 || out.MetaData.Size == 0 {
+			return nil, fmt.Errorf("%w: incomplete CLI metadata descriptor", ErrInvalidCLR)
+		}
 		if err := f.parseCLIMetadata(data, out); err != nil {
 			return nil, err
 		}
@@ -169,8 +173,12 @@ func (f *File) parseCLIMetadata(data []byte, out *CLRHeader) error {
 		sSize := binary.LittleEndian.Uint32(meta[pos+4 : pos+8])
 		pos += 8
 
-		nulIdx := bytes.IndexByte(meta[pos:], 0)
+		searchEnd := min(len(meta), pos+maxCLRStreamNameBytes)
+		nulIdx := bytes.IndexByte(meta[pos:searchEnd], 0)
 		if nulIdx < 0 {
+			if searchEnd < len(meta) {
+				return fmt.Errorf("%w: CLI stream name exceeds %d bytes", ErrCLRLimit, maxCLRStreamNameBytes)
+			}
 			return fmt.Errorf("%w: unterminated CLI stream name", ErrInvalidCLR)
 		}
 		name := string(meta[pos : pos+nulIdx])

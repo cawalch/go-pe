@@ -333,7 +333,7 @@ field. Don't pass that value to `RVAToOffset`.
 
 - `File.TLS` decodes `IMAGE_TLS_DIRECTORY32` / `IMAGE_TLS_DIRECTORY64` and its null-terminated `AddressOfCallBacks` array (`MaxTLSCallbacks`).
 - `File.CLR` decodes the `.NET` `IMAGE_COR20_HEADER` and `BSJB` CLI metadata root and stream headers.
-- `File.Exceptions` decodes 12-byte `RUNTIME_FUNCTION` entries from `.pdata` (`MaxExceptionEntries`).
+- `File.Exceptions` decodes `RUNTIME_FUNCTION` entries from `.pdata` (12-byte entries on x64 and 8-byte entries on ARM/ARM64/ARM64EC, bounded by `MaxExceptionEntries`).
 - `ShannonEntropy`, `File.SectionEntropy`, and `File.OverlayEntropy` compute bits-per-byte Shannon entropy without heap allocations.
 - `RichHeader.MD5` returns the lowercase hexadecimal MD5 digest of `ClearData`.
 - Package `detect` (`github.com/cawalch/go-pe/detect`) provides higher-level heuristic anomaly checks (such as `detect.Sections`) outside the core parser package.

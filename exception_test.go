@@ -51,4 +51,32 @@ func TestExceptionDirectory(t *testing.T) {
 	if _, err := fBad.Exceptions(data64); !errors.Is(err, pe.ErrInvalidException) {
 		t.Fatalf("misaligned Exceptions err = %v, want ErrInvalidException", err)
 	}
+
+	// ARM64 uses 8-byte RUNTIME_FUNCTION entries (BeginAddress + UnwindData).
+	armData := testfixture.Minimal(true, 1)
+	binary.LittleEndian.PutUint16(armData[132:], pe.MachineARM64)
+	fArmInit, err := pe.New(armData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	armSecOff := int(fArmInit.Sections[0].PointerToRawData)
+	armSecRVA := fArmInit.Sections[0].VirtualAddress
+	binary.LittleEndian.PutUint32(armData[dirOff:], armSecRVA)
+	binary.LittleEndian.PutUint32(armData[dirOff+4:], 16) // 2 x 8-byte entries
+	binary.LittleEndian.PutUint32(armData[armSecOff:], 0x1000)
+	binary.LittleEndian.PutUint32(armData[armSecOff+4:], 0x2001)
+	binary.LittleEndian.PutUint32(armData[armSecOff+8:], 0x1100)
+	binary.LittleEndian.PutUint32(armData[armSecOff+12:], 0x2021)
+
+	fArm, err := pe.New(armData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	armEntries, err := fArm.Exceptions(armData)
+	if err != nil {
+		t.Fatalf("ARM64 Exceptions err = %v", err)
+	}
+	if len(armEntries) != 2 || armEntries[0].BeginAddress != 0x1000 || armEntries[0].EndAddress != 0 || armEntries[1].UnwindData != 0x2021 {
+		t.Fatalf("unexpected ARM64 Exceptions: %+v", armEntries)
+	}
 }

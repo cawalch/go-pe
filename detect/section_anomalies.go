@@ -82,8 +82,8 @@ func (a SectionAnomalies) Any() bool {
 //   - TimeDateStamp == 0 is recorded in ZeroTimeDateStamp but does not set
 //     SuspiciousTimeDateStamp or Any().
 func Sections(f *pe.File, data []byte, opts *SectionOptions) (SectionAnomalies, error) {
-	if f == nil {
-		return SectionAnomalies{}, fmt.Errorf("%w: nil File", pe.ErrInvalidHeader)
+	if f == nil || (!f.Is32Bit() && !f.Is64Bit()) {
+		return SectionAnomalies{}, fmt.Errorf("%w: file headers not parsed", pe.ErrInvalidHeader)
 	}
 	threshold := DefaultHighEntropyThreshold
 	includeDebug := false

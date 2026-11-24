@@ -75,3 +75,35 @@ func TestTLSDirectoryPE32AndPE64(t *testing.T) {
 		}
 	}
 }
+
+func TestTLSCallbackErrorsAndEmptyCallbacks(t *testing.T) {
+	data := testfixture.Minimal(true, 1)
+	f, err := pe.New(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secOff := int(f.Sections[0].PointerToRawData)
+	secRVA := f.Sections[0].VirtualAddress
+	dirOff := 152 + 112 + pe.DataDirectoryTLS*8
+	binary.LittleEndian.PutUint32(data[dirOff:], secRVA)
+	binary.LittleEndian.PutUint32(data[dirOff+4:], 40)
+
+	// AddressOfCallBacks == 0 returns empty callback slice without error.
+	fZero, err := pe.New(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tls, err := fZero.TLS(data)
+	if err != nil || tls == nil || len(tls.Callbacks) != 0 {
+		t.Fatalf("zero AddressOfCallBacks = (%+v, %v), want empty callbacks", tls, err)
+	}
+
+	// Callback VA below ImageBase returns ErrInvalidTLS.
+	cbArrayVA := f.OptionalHeader.ImageBase + uint64(secRVA+64)
+	binary.LittleEndian.PutUint64(data[secOff+24:], cbArrayVA)
+	binary.LittleEndian.PutUint64(data[secOff+64:], 0x100) // below ImageBase
+	binary.LittleEndian.PutUint64(data[secOff+72:], 0)
+	if _, err := fZero.TLS(data); !errors.Is(err, pe.ErrInvalidTLS) {
+		t.Fatalf("callback VA below ImageBase err = %v, want ErrInvalidTLS", err)
+	}
+}
