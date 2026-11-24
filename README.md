@@ -122,7 +122,8 @@ for individual types and methods.
 
 | Task | API | Details |
 | --- | --- | --- |
-| Read standard imports and compute import hashes | `File.Imports`, `File.Imphash`, `Imphash` | [Standard imports](docs/parsing.md#read-standard-imports) |
+| Read standard imports and compute import hashes | `File.Imports`, `File.Imphash`, `Imphash`, `File.DelayAwareImphash` | [Standard imports](docs/parsing.md#read-standard-imports) |
+| Read load configuration and base relocations | `File.LoadConfig`, `File.BaseRelocs` | [Parsing guide](docs/parsing.md#load-configuration-and-base-relocations) |
 | Read delayed imports | `File.DelayImports` | [Delayed imports](docs/parsing.md#read-delayed-imports) |
 | Read exports and forwarders | `File.Exports` | [Exports](docs/parsing.md#read-standard-exports) |
 | Read resources and version information | `File.Resources`, `File.ResourcePayload`, `ParseVersionInfo` | [Version information](docs/parsing.md#parse-version-information-resources) |

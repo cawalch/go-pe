@@ -20,8 +20,12 @@
 // work with descriptor, symbol, and name limits. Use [File.DelayImports] to
 // read delayed import descriptors, DLLs, symbols, and IAT slot RVAs with the
 // same bounded decoding semantics.
-// Call [File.Imphash] or [Imphash] to compute the standard MD5 import hash, which
-// returns [ErrNoImports] or false rather than md5("") when no symbols exist.
+// Call [File.Imphash], [Imphash], [File.DelayAwareImphash], or
+// [DelayAwareImphash] to compute the standard or delay-aware MD5 import hash,
+// which returns [ErrNoImports] or false rather than md5("") when no symbols exist.
+// Use [File.LoadConfig] to read load configuration metadata (SafeSEH,
+// SecurityCookie, GuardCF, CHPE) and [File.BaseRelocs] to read base relocation
+// blocks.
 // Use [File.Exports] to read export metadata, address slots, aliases, and forwarders
 // under separate table and string limits. Use [File.Certificates] and
 // [File.CertificatePayload] to enumerate bounded WIN_CERTIFICATE records and copy

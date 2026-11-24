@@ -336,7 +336,13 @@ field. Don't pass that value to `RVAToOffset`.
 - `File.Exceptions` decodes `RUNTIME_FUNCTION` entries from `.pdata` (12-byte entries on x64 and 8-byte entries on ARM/ARM64/ARM64EC, bounded by `MaxExceptionEntries`).
 - `ShannonEntropy`, `File.SectionEntropy`, and `File.OverlayEntropy` compute bits-per-byte Shannon entropy without heap allocations.
 - `RichHeader.MD5` returns the lowercase hexadecimal MD5 digest of `ClearData`.
-- Package `detect` (`github.com/cawalch/go-pe/detect`) provides higher-level heuristic anomaly checks (such as `detect.Sections`) outside the core parser package.
+
+## Load configuration and base relocations
+
+- `File.LoadConfig` decodes `IMAGE_LOAD_CONFIG_DIRECTORY32` / `IMAGE_LOAD_CONFIG_DIRECTORY64` (`SecurityCookie`, `SEHandlerTable`, `GuardCFFunctionTable`, `CHPEMetadataPointer`).
+- `File.BaseRelocs` decodes `IMAGE_BASE_RELOCATION` blocks and counts active (non-`ABSOLUTE`) relocation entries.
+- `DelayAwareImphash` and `File.DelayAwareImphash` hash both standard and delayed imports.
+- Package `detect` (`github.com/cawalch/go-pe/detect`) provides higher-level heuristic checks (`detect.Sections`, `detect.Mitigations`, `detect.ImportsAndExports`, `detect.Runtime`, `detect.Rich`, `detect.PDB`) outside the core parser.
 
 ## Related libraries
 
