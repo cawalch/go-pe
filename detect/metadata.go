@@ -1,8 +1,11 @@
-package pe
+package detect
 
 import (
+	"fmt"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/cawalch/go-pe"
 )
 
 // RichAnomalies reports structural or consistency anomalies in a PE image's
@@ -19,12 +22,12 @@ func (r RichAnomalies) Any() bool {
 	return r.InvalidChecksum || r.NonZeroPadding || r.LinkerVersionMismatch || r.SpoofedOnNonMSVC
 }
 
-// RichAnomalies inspects [File.RichHeader] for checksum failures, non-zero DanS
+// Rich inspects [pe.File.RichHeader] for checksum failures, non-zero DanS
 // padding, linker-version inconsistencies, and Rich headers embedded in
 // non-MSVC (e.g., Go, Rust, Nim, or MinGW DWARF) binaries.
-func (f *File) RichAnomalies(data []byte) (RichAnomalies, error) {
-	if err := f.validateParsedHeaders(); err != nil {
-		return RichAnomalies{}, err
+func Rich(f *pe.File, data []byte) (RichAnomalies, error) {
+	if f == nil {
+		return RichAnomalies{}, fmt.Errorf("%w: nil File", pe.ErrInvalidHeader)
 	}
 	rh, err := f.RichHeader(data)
 	if err != nil {
@@ -41,7 +44,6 @@ func (f *File) RichAnomalies(data []byte) (RichAnomalies, error) {
 	if rh.PaddingNonZero {
 		out.NonZeroPadding = true
 	}
-
 	if f.OptionalHeader.MajorLinkerVersion == 0 && f.OptionalHeader.MinorLinkerVersion == 0 && len(rh.Entries) > 0 {
 		out.LinkerVersionMismatch = true
 	}
@@ -53,7 +55,7 @@ func (f *File) RichAnomalies(data []byte) (RichAnomalies, error) {
 		}
 	}
 	if !out.SpoofedOnNonMSVC {
-		if rt, err := f.DetectRuntime(data); err == nil && rt.Language != RuntimeUnknown {
+		if rt, err := Runtime(f, data); err == nil && rt.Language != RuntimeUnknown {
 			out.SpoofedOnNonMSVC = true
 		}
 	}
@@ -62,7 +64,7 @@ func (f *File) RichAnomalies(data []byte) (RichAnomalies, error) {
 }
 
 // PDBAnomalies reports suspicious or privacy-leaking patterns in CodeView PDB
-// debug records ([File.Debug]).
+// debug records ([pe.File.Debug]).
 type PDBAnomalies struct {
 	AllZeroGUID        bool
 	ZeroAge            bool
@@ -86,11 +88,11 @@ var devPathMarkers = []string{
 	`\temp\`,
 }
 
-// PDBAnomalies inspects CodeView records from [File.Debug] for all-zero GUIDs,
-// zero age, non-UTF-8 or control-character paths, and developer build-path leaks.
-func (f *File) PDBAnomalies(data []byte) (PDBAnomalies, error) {
-	if err := f.validateParsedHeaders(); err != nil {
-		return PDBAnomalies{}, err
+// PDB inspects CodeView records from [pe.File.Debug] for all-zero GUIDs, zero
+// age, non-UTF-8 or control-character paths, and developer build-path leaks.
+func PDB(f *pe.File, data []byte) (PDBAnomalies, error) {
+	if f == nil {
+		return PDBAnomalies{}, fmt.Errorf("%w: nil File", pe.ErrInvalidHeader)
 	}
 	entries, err := f.Debug(data)
 	if err != nil {
@@ -98,14 +100,14 @@ func (f *File) PDBAnomalies(data []byte) (PDBAnomalies, error) {
 	}
 
 	var out PDBAnomalies
-	var zeroGUID CodeViewGUID
+	var zeroGUID pe.CodeViewGUID
 
 	for i := range entries {
 		cv := entries[i].CodeView
 		if cv == nil {
 			continue
 		}
-		if cv.Signature == CodeViewSignatureRSDS && cv.GUID == zeroGUID {
+		if cv.Signature == pe.CodeViewSignatureRSDS && cv.GUID == zeroGUID {
 			out.AllZeroGUID = true
 		}
 		if cv.Age == 0 {

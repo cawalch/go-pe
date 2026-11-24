@@ -1,12 +1,13 @@
-package pe
+package detect
 
 import (
 	"bytes"
 	"fmt"
+
+	"github.com/cawalch/go-pe"
 )
 
-// MaxRuntimeScanBytes limits the maximum bytes scanned per section by
-// [File.DetectRuntime].
+// MaxRuntimeScanBytes limits the maximum bytes scanned per section by [Runtime].
 const MaxRuntimeScanBytes = 32 << 20
 
 // RuntimeLanguage identifies the detected compiled language runtime.
@@ -37,15 +38,14 @@ type RuntimeMetadata struct {
 
 var goBuildInfoMagic = []byte("\xff Go buildinf:")
 
-// DetectRuntime scans relevant PE sections (.rdata, .data, .text, .rustc,
-// .gopclntab) for Go, Rust, and Nim runtime markers without external
-// dependencies.
-func (f *File) DetectRuntime(data []byte) (RuntimeMetadata, error) {
-	if err := f.validateParsedHeaders(); err != nil {
-		return RuntimeMetadata{}, err
+// Runtime scans relevant PE sections (.rdata, .data, .text, .rustc, .gopclntab)
+// for Go, Rust, and Nim runtime markers without external dependencies.
+func Runtime(f *pe.File, data []byte) (RuntimeMetadata, error) {
+	if f == nil {
+		return RuntimeMetadata{}, fmt.Errorf("%w: nil File", pe.ErrInvalidHeader)
 	}
-	if f.fileSize < 0 || int64(len(data)) != f.fileSize {
-		return RuntimeMetadata{}, fmt.Errorf("%w: input size %d does not match parsed file size %d", ErrOutOfBounds, len(data), f.fileSize)
+	if f.FileSize() < 0 || int64(len(data)) != f.FileSize() {
+		return RuntimeMetadata{}, fmt.Errorf("%w: input size %d does not match parsed file size %d", pe.ErrOutOfBounds, len(data), f.FileSize())
 	}
 
 	var out RuntimeMetadata
@@ -87,7 +87,6 @@ func (f *File) DetectRuntime(data []byte) (RuntimeMetadata, error) {
 			goInfo.HasGoPclntab = true
 		}
 
-		// Rust markers.
 		if bytes.Contains(body, []byte("panicked at")) {
 			out.RustMarkers = appendUnique(out.RustMarkers, "panicked at")
 		}
@@ -98,7 +97,6 @@ func (f *File) DetectRuntime(data []byte) (RuntimeMetadata, error) {
 			out.RustMarkers = appendUnique(out.RustMarkers, ".cargo/registry")
 		}
 
-		// Nim markers.
 		if bytes.Contains(body, []byte("nimMain")) {
 			out.NimMarkers = appendUnique(out.NimMarkers, "nimMain")
 		}
@@ -130,13 +128,10 @@ func (f *File) DetectRuntime(data []byte) (RuntimeMetadata, error) {
 }
 
 func extractGoVersion(buildInfo []byte) string {
-	// Go 1.18+ inline buildinfo: magic (14B) + ptrSize (1B) + endianFlags (1B) +
-	// inline varint-prefixed version string at offset 32 when flags&2 != 0.
 	if len(buildInfo) < 34 {
 		return ""
 	}
-	flags := buildInfo[15]
-	if flags&2 != 0 {
+	if buildInfo[15]&2 != 0 {
 		vLen := int(buildInfo[32])
 		if vLen > 0 && vLen < 64 && 33+vLen <= len(buildInfo) {
 			return string(buildInfo[33 : 33+vLen])
@@ -146,10 +141,6 @@ func extractGoVersion(buildInfo []byte) string {
 }
 
 func hasGoPclntabMagic(b []byte) bool {
-	// Go 1.20+ pclntab magic: f1 ff ff ff 00 00 (LE: 0xfffffff1)
-	// Go 1.18-1.19:           f0 ff ff ff 00 00
-	// Go 1.16-1.17:           fa ff ff ff 00 00
-	// Go 1.2-1.15:            fb ff ff ff 00 00
 	return bytes.Contains(b, []byte{0xf1, 0xff, 0xff, 0xff, 0x00, 0x00}) ||
 		bytes.Contains(b, []byte{0xf0, 0xff, 0xff, 0xff, 0x00, 0x00}) ||
 		bytes.Contains(b, []byte{0xfa, 0xff, 0xff, 0xff, 0x00, 0x00}) ||

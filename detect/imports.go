@@ -1,65 +1,12 @@
-package pe
+package detect
 
 import (
+	"fmt"
 	"math"
 	"strings"
+
+	"github.com/cawalch/go-pe"
 )
-
-// DelayAwareImphash computes an MD5 import hash combining standard imports
-// and delayed imports in order. Returns ("", false) when both slices contain
-// zero symbols.
-func DelayAwareImphash(imports []ImportLibrary, delayImports []DelayImportLibrary) (string, bool) {
-	b := newImphashBuilder()
-	for i := range imports {
-		lib := &imports[i]
-		dll := imphashCString(lib.DLL)
-		libName := imphashLibraryName(dll)
-		for j := range lib.Symbols {
-			sym := &lib.Symbols[j]
-			funcName := imphashCString(sym.Name)
-			if sym.ByOrdinal {
-				funcName = imphashOrdinalName(dll, sym.Ordinal)
-			}
-			b.add(libName, funcName)
-		}
-	}
-	for i := range delayImports {
-		lib := &delayImports[i]
-		dll := imphashCString(lib.DLL)
-		libName := imphashLibraryName(dll)
-		for j := range lib.Symbols {
-			sym := &lib.Symbols[j]
-			funcName := imphashCString(sym.Name)
-			if sym.ByOrdinal {
-				funcName = imphashOrdinalName(dll, sym.Ordinal)
-			}
-			b.add(libName, funcName)
-		}
-	}
-	if b.first {
-		return "", false
-	}
-	return b.sum(), true
-}
-
-// DelayAwareImphash reads standard and delayed imports via [File.Imports] and
-// [File.DelayImports] and computes their combined MD5 import hash. Returns
-// ("", [ErrNoImports]) when no imported symbols exist in either directory.
-func (f *File) DelayAwareImphash(data []byte) (string, error) {
-	imports, err := f.Imports(data)
-	if err != nil {
-		return "", err
-	}
-	delays, err := f.DelayImports(data)
-	if err != nil {
-		return "", err
-	}
-	digest, ok := DelayAwareImphash(imports, delays)
-	if !ok {
-		return "", ErrNoImports
-	}
-	return digest, nil
-}
 
 // ImportAnomalies reports suspicious import, delay-load, API-hashing, and
 // export/reflective-DLL indicators.
@@ -101,12 +48,12 @@ var sensitiveDelayAPIs = map[string]struct{}{
 	"getprocaddress":             {},
 }
 
-// ImportAndExportAnomalies inspects standard imports, delayed imports, and
-// exports for delay-load API hiding, minimal-IAT API hashing, suspicious API
-// clusters, and reflective-DLL / export anomalies.
-func (f *File) ImportAndExportAnomalies(data []byte) (ImportAnomalies, error) {
-	if err := f.validateParsedHeaders(); err != nil {
-		return ImportAnomalies{}, err
+// ImportsAndExports inspects standard imports, delayed imports, and exports for
+// delay-load API hiding, minimal-IAT API hashing, suspicious API clusters, and
+// reflective-DLL / export anomalies.
+func ImportsAndExports(f *pe.File, data []byte) (ImportAnomalies, error) {
+	if f == nil {
+		return ImportAnomalies{}, fmt.Errorf("%w: nil File", pe.ErrInvalidHeader)
 	}
 	imports, err := f.Imports(data)
 	if err != nil {
@@ -157,16 +104,14 @@ func (f *File) ImportAndExportAnomalies(data []byte) (ImportAnomalies, error) {
 		}
 	}
 
-	// Minimal/empty IAT on native (non-.NET) binary paired with high section entropy.
-	hasCLR := f.OptionalHeader.NumberOfRvaAndSizes > DataDirectoryCLRRuntime &&
-		f.OptionalHeader.DataDirectories[DataDirectoryCLRRuntime].VirtualAddress != 0
+	hasCLR := f.OptionalHeader.NumberOfRvaAndSizes > pe.DataDirectoryCLRRuntime &&
+		f.OptionalHeader.DataDirectories[pe.DataDirectoryCLRRuntime].VirtualAddress != 0
 	if !hasCLR && stdCount <= 3 && len(delays) == 0 && f.OptionalHeader.AddressOfEntryPoint != 0 {
-		if f.hasHighEntropyNonDebugSection(data, 7.0) {
+		if hasHighEntropyNonDebugSection(f, data, 7.0) {
 			out.MinimalIATWithHighEntropy = true
 		}
 	}
 
-	// Suspicious API clusters across both Imports and DelayImports.
 	if hasAny(allSet, "virtualallocex", "ntwritevirtualmemory", "writeprocessmemory") &&
 		hasAny(allSet, "createremotethread", "ntcreatethreadex", "queueuserapc", "setthreadcontext", "ntunmapviewofsection") {
 		out.SuspiciousAPIClusters = append(out.SuspiciousAPIClusters, "process_injection")
@@ -209,8 +154,8 @@ func hasAny(set map[string]struct{}, keys ...string) bool {
 	return false
 }
 
-func (f *File) hasHighEntropyNonDebugSection(data []byte, threshold float64) bool {
-	if int64(len(data)) != f.fileSize {
+func hasHighEntropyNonDebugSection(f *pe.File, data []byte, threshold float64) bool {
+	if int64(len(data)) != f.FileSize() {
 		return false
 	}
 	for i := range f.Sections {

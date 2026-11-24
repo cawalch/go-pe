@@ -329,6 +329,13 @@ another parser's behavior for malformed images.
 The certificate data directory stores a file offset in its `VirtualAddress`
 field. Don't pass that value to `RVAToOffset`.
 
+## Load configuration and base relocations
+
+- `File.LoadConfig` decodes `IMAGE_LOAD_CONFIG_DIRECTORY32` / `IMAGE_LOAD_CONFIG_DIRECTORY64` (`SecurityCookie`, `SEHandlerTable`, `GuardCFFunctionTable`, `CHPEMetadataPointer`).
+- `File.BaseRelocs` decodes `IMAGE_BASE_RELOCATION` blocks and counts active (non-`ABSOLUTE`) relocation entries.
+- `DelayAwareImphash` and `File.DelayAwareImphash` hash both standard and delayed imports.
+- Package `detect` (`github.com/cawalch/go-pe/detect`) provides higher-level heuristic checks (`detect.Mitigations`, `detect.ImportsAndExports`, `detect.Runtime`, `detect.Rich`, `detect.PDB`) outside the core parser.
+
 ## Related libraries
 
 Other Go libraries provide PE analysis features beyond this parser's scope.
