@@ -35,6 +35,10 @@ In your Go module, install the experimental release:
 go get github.com/cawalch/go-pe@v0.2.0
 ```
 
+APIs marked with a dagger (†) in the task table below are available only on
+`main` and are not part of `v0.2.0`. Until the next release, install them with
+`go get github.com/cawalch/go-pe@main`.
+
 For reproducible builds, commit the resulting `go.mod` and `go.sum` files. Go
 records a version that identifies the selected commit.
 
@@ -122,14 +126,14 @@ for individual types and methods.
 
 | Task | API | Details |
 | --- | --- | --- |
-| Read standard imports and compute import hashes | `File.Imports`, `File.Imphash`, `Imphash`, `File.DelayAwareImphash` | [Standard imports](docs/parsing.md#read-standard-imports) |
-| Read load configuration and base relocations | `File.LoadConfig`, `File.BaseRelocs` | [Parsing guide](docs/parsing.md#load-configuration-and-base-relocations) |
+| Read standard imports and compute import hashes | `File.Imports`, `File.Imphash`, `Imphash`, `File.DelayAwareImphash`† | [Standard imports](docs/parsing.md#read-standard-imports) |
+| Read load configuration and base relocations | `File.LoadConfig`†, `File.BaseRelocs`† | [Parsing guide](docs/parsing.md#load-configuration-and-base-relocations) |
 | Read delayed imports | `File.DelayImports` | [Delayed imports](docs/parsing.md#read-delayed-imports) |
 | Read exports and forwarders | `File.Exports` | [Exports](docs/parsing.md#read-standard-exports) |
 | Read resources and version information | `File.Resources`, `File.ResourcePayload`, `ParseVersionInfo` | [Version information](docs/parsing.md#parse-version-information-resources) |
-| Decode Rich headers | `File.RichHeader`, `RichHeader.MD5` | [Rich headers](docs/parsing.md#decode-rich-headers) |
-| Read TLS, CLR (.NET), and exception directories | `File.TLS`, `File.CLR`, `File.Exceptions` | [Parsing guide](docs/parsing.md#additional-directories-and-entropy) |
-| Measure section and overlay entropy | `ShannonEntropy`, `File.SectionEntropy`, `File.OverlayEntropy` | [Parsing guide](docs/parsing.md#additional-directories-and-entropy) |
+| Decode Rich headers | `File.RichHeader`, `RichHeader.MD5`† | [Rich headers](docs/parsing.md#decode-rich-headers) |
+| Read TLS, CLR (.NET), and exception directories | `File.TLS`†, `File.CLR`†, `File.Exceptions`† | [Parsing guide](docs/parsing.md#additional-directories-and-entropy) |
+| Measure section and overlay entropy | `ShannonEntropy`†, `File.SectionEntropy`†, `File.OverlayEntropy`† | [Parsing guide](docs/parsing.md#additional-directories-and-entropy) |
 | Read debug records | `File.Debug` | [Debug records](docs/parsing.md#read-debug-directories-and-codeview-records) |
 | Read attribute certificates | `File.Certificates`, `File.CertificatePayload` | [Certificates](docs/parsing.md#read-attribute-certificates) |
 | Parse Authenticode signatures | `File.AuthenticodeSignatures`, `ParseAuthenticodeSignatures` | [API reference](https://pkg.go.dev/github.com/cawalch/go-pe#File.AuthenticodeSignatures) |
@@ -138,6 +142,8 @@ for individual types and methods.
 | Compute PE checksums | `File.ComputeCheckSum`, `File.VerifyCheckSum` | [API reference](https://pkg.go.dev/github.com/cawalch/go-pe#File.ComputeCheckSum) |
 | Inspect overlays and layout anomalies | `File.OverlayOffset`, `File.Overlay`, `File.LayoutAnomalies`, `File.HasOverlappingSections` | [API reference](https://pkg.go.dev/github.com/cawalch/go-pe#File.OverlayOffset) |
 | Convert addresses | `File.RVAToOffset`, `File.OffsetToRVA` | [Address conversion](docs/parsing.md#convert-addresses) |
+
+† Available only on `main`; not in the pinned release above.
 
 ## Integrate with an application
 

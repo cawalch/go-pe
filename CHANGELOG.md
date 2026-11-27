@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 for pre-v1 releases (`0.y.z` minor bumps may include API additions or changes).
 
+## [Unreleased]
+
+### Added
+- Bits-per-byte Shannon entropy helpers: `ShannonEntropy`,
+  `File.SectionEntropy`, and `File.OverlayEntropy` (#84).
+- TLS, CLR (.NET), and exception directory parsers: `File.TLS`, `File.CLR`,
+  and `File.Exceptions` (#84).
+- `RichHeader.MD5` digest of Rich header clear data (#84).
+- Load configuration and base relocation parsers: `File.LoadConfig` and
+  `File.BaseRelocs` (#85).
+- Delay-aware import hashing: `DelayAwareImphash` and
+  `File.DelayAwareImphash` (#85).
+- `detect` subpackage (`github.com/cawalch/go-pe/detect`) with heuristic
+  checks: `detect.Sections`, `detect.Mitigations`, `detect.ImportsAndExports`,
+  `detect.Runtime`, `detect.Rich`, and `detect.PDB` (#84, #85).
+
 ## [v0.2.0] - 2026-11-21
 
 ### Added
@@ -51,5 +67,6 @@ for pre-v1 releases (`0.y.z` minor bumps may include API additions or changes).
   - Attribute certificates, Authenticode image digests, and offline signature
     and timestamp verification with caller-supplied trust roots.
 
+[Unreleased]: https://github.com/cawalch/go-pe/compare/v0.2.0...HEAD
 [v0.2.0]: https://github.com/cawalch/go-pe/compare/v0.1.0...v0.2.0
 [v0.1.0]: https://github.com/cawalch/go-pe/releases/tag/v0.1.0
