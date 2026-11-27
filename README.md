@@ -17,8 +17,11 @@ is the latest release, and the API can change before v1.0.0. See the [release gu
 - Read resources, version information, Rich headers, and CodeView debug records.
 - Extract attribute certificates and Authenticode signature metadata.
 - Compute Authenticode image digests and verify signatures and timestamps
-  offline. Certificate trust checks require caller-supplied roots. Verification
-  does not perform revocation checks or reproduce Windows trust policy.
+  offline. Certificate trust checks require caller-supplied roots. Revocation
+  is evaluated only from CRLs embedded in a signature or supplied in
+  `AuthenticodeVerifyOptions`; without any CRL it reports `unchecked`. Network
+  AIA/OCSP/CRL fetches are never performed and Windows trust policy is not
+  reproduced.
 
 The library doesn't parse external PDB symbol files or resolve bound import
 addresses. It doesn't support standalone Common Object File Format (COFF)
