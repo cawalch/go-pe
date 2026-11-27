@@ -21,7 +21,10 @@ is the latest release, and the API can change before v1.0.0. See the [release gu
   is evaluated only from CRLs embedded in a signature or supplied in
   `AuthenticodeVerifyOptions`; without any CRL it reports `unchecked`. Network
   AIA/OCSP/CRL fetches are never performed and Windows trust policy is not
-  reproduced.
+  reproduced. The image digest covers every file byte except the
+  `OptionalHeader.CheckSum`, the certificate data-directory entry, and the
+  certificate table, including bytes appended after signing, so post-signature
+  appends are reported as tampered even where Windows would ignore them.
 
 The library doesn't parse external PDB symbol files or resolve bound import
 addresses. It doesn't support standalone Common Object File Format (COFF)

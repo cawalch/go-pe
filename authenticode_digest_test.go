@@ -7,6 +7,7 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
+	"crypto/x509"
 	"encoding/binary"
 	"errors"
 	"hash"
@@ -266,6 +267,53 @@ func TestAuthenticodeDigestLayouts(t *testing.T) {
 		}
 		if len(ranges) != 3 {
 			t.Fatalf("len(ranges) = %d, want 3", len(ranges))
+		}
+	})
+
+	t.Run("AppendedOverlayChangesDigest", func(t *testing.T) {
+		pki := testfixture.NewAuthenticodePKI(testfixture.AuthenticodePKIOptions{})
+		signed, f := signSyntheticPE(t, true, crypto.SHA256, testfixture.SignedPKCS7Options{
+			SignerCert: pki.SignerCert,
+			SignerKey:  pki.SignerKey,
+			ExtraCerts: []*x509.Certificate{pki.InterCert},
+		})
+		clean, err := f.AuthenticodeDigest(signed, crypto.SHA256)
+		if err != nil {
+			t.Fatalf("AuthenticodeDigest(clean) error = %v", err)
+		}
+
+		appended := append(bytes.Clone(signed), make([]byte, 8)...)
+		fa, err := pe.New(appended)
+		if err != nil {
+			t.Fatalf("New(appended) error = %v", err)
+		}
+		got, err := fa.AuthenticodeDigest(appended, crypto.SHA256)
+		if err != nil {
+			t.Fatalf("AuthenticodeDigest(appended) error = %v", err)
+		}
+		if bytes.Equal(got, clean) {
+			t.Fatal("appending bytes past the certificate table did not change the digest")
+		}
+
+		// Pinned rule: all bytes through EOF are hashed except the CheckSum,
+		// certificate directory entry, and certificate table, so the included
+		// ranges always reach EOF.
+		ranges, err := fa.AuthenticodeDigestRanges(appended)
+		if err != nil {
+			t.Fatalf("AuthenticodeDigestRanges(appended) error = %v", err)
+		}
+		if last := ranges[len(ranges)-1]; last.Offset+last.Length != int64(len(appended)) {
+			t.Fatalf("last range ends at %d, want EOF %d", last.Offset+last.Length, len(appended))
+		}
+
+		// Fail-closed consequence of this rule: post-signature appends report
+		// tampering even though Windows would still validate the signature.
+		res, err := fa.VerifyAuthenticode(appended, pe.AuthenticodeVerifyOptions{})
+		if err != nil {
+			t.Fatalf("VerifyAuthenticode(appended) error = %v", err)
+		}
+		if len(res.Signatures) != 1 || res.Signatures[0].Digest.Status != pe.AuthenticodeStatusInvalid {
+			t.Fatalf("VerifyAuthenticode(appended) = %+v, want one invalid digest", res.Signatures)
 		}
 	})
 
