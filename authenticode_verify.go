@@ -12,6 +12,7 @@ import (
 	"encoding/asn1"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -436,6 +437,26 @@ func verifySignaturePadding(trailingBytes int, strict bool) AuthenticodeCheck {
 	}
 }
 
+// validateSignedDataDigestAlgorithms enforces the SignedData.digestAlgorithms
+// conformance rule; the reason names the offending OID.
+func validateSignedDataDigestAlgorithms(set []pkix.AlgorithmIdentifier, signerAlg, indirectAlg asn1.ObjectIdentifier) (string, bool) {
+	if len(set) != 1 {
+		oids := make([]string, len(set))
+		for i, alg := range set {
+			oids[i] = alg.Algorithm.String()
+		}
+		return fmt.Sprintf("SignedData.digestAlgorithms must contain exactly one entry, got %d [%s]", len(set), strings.Join(oids, ",")), false
+	}
+	got := set[0].Algorithm
+	if !got.Equal(signerAlg) {
+		return fmt.Sprintf("SignedData.digestAlgorithms %s does not match SignerInfo.digestAlgorithm %s", got, signerAlg), false
+	}
+	if len(indirectAlg) > 0 && !got.Equal(indirectAlg) {
+		return fmt.Sprintf("SignedData.digestAlgorithms %s does not match IndirectData.digestAlgorithm %s", got, indirectAlg), false
+	}
+	return "", true
+}
+
 func verifyAuthenticodeSigner(
 	signerIndex int,
 	sig AuthenticodeSignature,
@@ -461,6 +482,19 @@ func verifyAuthenticodeSigner(
 		}
 	} else {
 		out.CMS = verifySignerCMS(signer, signerCert, binding, sig.ContentType, false, contentPayload)
+	}
+
+	// Only reach the conformance check when CMS is otherwise valid; a nil
+	// IndirectData (foreign content type) is reported by verifyImageDigest.
+	if out.CMS.Status == AuthenticodeStatusValid {
+		var indirectAlg asn1.ObjectIdentifier
+		if sig.IndirectData != nil {
+			indirectAlg = sig.IndirectData.DigestAlgorithm.Algorithm
+		}
+		if reason, ok := validateSignedDataDigestAlgorithms(sig.DigestAlgorithms, signer.DigestAlgorithm.Algorithm, indirectAlg); !ok {
+			out.CMS.Status = AuthenticodeStatusInvalid
+			out.CMS.Reason = reason
+		}
 	}
 
 	out.Timestamps = make([]AuthenticodeTimestampVerification, len(signer.Timestamps))

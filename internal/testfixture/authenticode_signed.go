@@ -204,7 +204,13 @@ type SignedPKCS7Options struct {
 	CMSDigestAlg           crypto.Hash
 	OverrideSigOID         asn1.ObjectIdentifier
 	OverrideImageDigestOID asn1.ObjectIdentifier
-	SigningTime            time.Time
+	// OverrideDigestAlgorithms replaces the SignedData.digestAlgorithms set
+	// when non-nil (an empty slice yields an empty set).
+	OverrideDigestAlgorithms []pkix.AlgorithmIdentifier
+	// OverrideContentType relabels the content type in both EncapContentInfo
+	// and the contentType signed attribute.
+	OverrideContentType asn1.ObjectIdentifier
+	SigningTime         time.Time
 
 	// Fault-injection knobs for negative tests.
 	CorruptSignature        bool
@@ -309,10 +315,19 @@ func BuildSignedPKCS7(opts SignedPKCS7Options) []byte {
 		contentDigest[0] ^= 0xff
 	}
 
+	algSet := []pkix.AlgorithmIdentifier{{Algorithm: digestOIDForHash(cmsAlg)}}
+	if opts.OverrideDigestAlgorithms != nil {
+		algSet = opts.OverrideDigestAlgorithms
+	}
+	contentOID := oidSpcIndirectData
+	if len(opts.OverrideContentType) > 0 {
+		contentOID = opts.OverrideContentType
+	}
+
 	siBytes := buildSignerInfo(signerBuildParams{
 		cert:                    opts.SignerCert,
 		key:                     opts.SignerKey,
-		contentTypeOID:          oidSpcIndirectData,
+		contentTypeOID:          contentOID,
 		contentDigest:           contentDigest,
 		digestAlg:               cmsAlg,
 		useSubjectKeyID:         opts.UseSubjectKeyID,
@@ -378,9 +393,9 @@ func BuildSignedPKCS7(opts SignedPKCS7Options) []byte {
 
 	sd := cmsSignedData{
 		Version:          version,
-		DigestAlgorithms: []pkix.AlgorithmIdentifier{{Algorithm: digestOIDForHash(cmsAlg)}},
+		DigestAlgorithms: algSet,
 		EncapContentInfo: cmsContentInfo{
-			ContentType: oidSpcIndirectData,
+			ContentType: contentOID,
 			Content:     mustExplicitTag0(encapRaw),
 		},
 		SignerInfos: asn1.RawValue{
