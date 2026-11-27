@@ -331,6 +331,8 @@ field. Don't pass that value to `RVAToOffset`.
 
 ## Additional directories and entropy
 
+_The APIs in this section are on `main` only until the next release._
+
 - `File.TLS` decodes `IMAGE_TLS_DIRECTORY32` / `IMAGE_TLS_DIRECTORY64` and its null-terminated `AddressOfCallBacks` array (`MaxTLSCallbacks`).
 - `File.CLR` decodes the `.NET` `IMAGE_COR20_HEADER` and `BSJB` CLI metadata root and stream headers.
 - `File.Exceptions` decodes `RUNTIME_FUNCTION` entries from `.pdata` (12-byte entries on x64 and 8-byte entries on ARM/ARM64/ARM64EC, bounded by `MaxExceptionEntries`).
@@ -338,6 +340,9 @@ field. Don't pass that value to `RVAToOffset`.
 - `RichHeader.MD5` returns the lowercase hexadecimal MD5 digest of `ClearData`.
 
 ## Load configuration and base relocations
+
+_The APIs in this section, including package `detect`, are on `main` only
+until the next release._
 
 - `File.LoadConfig` decodes `IMAGE_LOAD_CONFIG_DIRECTORY32` / `IMAGE_LOAD_CONFIG_DIRECTORY64` (`SecurityCookie`, `SEHandlerTable`, `GuardCFFunctionTable`, `CHPEMetadataPointer`).
 - `File.BaseRelocs` decodes `IMAGE_BASE_RELOCATION` blocks and counts active (non-`ABSOLUTE`) relocation entries.
