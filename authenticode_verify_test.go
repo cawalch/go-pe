@@ -3,10 +3,12 @@ package pe_test
 import (
 	"crypto"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/asn1"
 	"encoding/binary"
 	"errors"
 	"math/big"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -314,6 +316,96 @@ func TestVerifyAuthenticodeTamperingAndNegativeCases(t *testing.T) {
 		}
 		if res.Signatures[0].Signers[0].CMS.Status != pe.AuthenticodeStatusUnsupported {
 			t.Fatalf("CMS = %+v, want Unsupported", res.Signatures[0].Signers[0].CMS)
+		}
+	})
+
+	sha512OID := asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 4, 2, 3}
+	sha256OID := asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 4, 2, 1}
+
+	t.Run("SignedDataDigestAlgorithmsMismatch", func(t *testing.T) {
+		data, f := signSyntheticPE(t, true, crypto.SHA256, testfixture.SignedPKCS7Options{
+			SignerCert: pki.SignerCert,
+			SignerKey:  pki.SignerKey,
+			OverrideDigestAlgorithms: []pkix.AlgorithmIdentifier{
+				{Algorithm: sha512OID},
+			},
+		})
+		res, err := f.VerifyAuthenticode(data, pe.AuthenticodeVerifyOptions{})
+		if err != nil {
+			t.Fatalf("VerifyAuthenticode: %v", err)
+		}
+		// Only the SignedData set mismatch is wrong; the image digest is valid.
+		if res.Signatures[0].Digest.Status != pe.AuthenticodeStatusValid {
+			t.Fatalf("Digest = %+v, want Valid", res.Signatures[0].Digest)
+		}
+		signer := res.Signatures[0].Signers[0]
+		if signer.CMS.Status != pe.AuthenticodeStatusInvalid {
+			t.Fatalf("CMS = %+v, want Invalid", signer.CMS)
+		}
+		if !strings.Contains(signer.CMS.Reason, "2.16.840.1.101.3.4.2.3") {
+			t.Fatalf("CMS.Reason = %q, want the mismatching OID", signer.CMS.Reason)
+		}
+		if signer.CMS.SignatureAlgorithm != x509.ECDSAWithSHA256 {
+			t.Fatalf("CMS.SignatureAlgorithm = %v, want ECDSA-SHA256 preserved", signer.CMS.SignatureAlgorithm)
+		}
+	})
+
+	t.Run("SignedDataDigestAlgorithmsCount", func(t *testing.T) {
+		for name, set := range map[string][]pkix.AlgorithmIdentifier{
+			"empty":     {},
+			"duplicate": {{Algorithm: sha256OID}, {Algorithm: sha256OID}},
+			"two":       {{Algorithm: sha256OID}, {Algorithm: sha512OID}},
+		} {
+			t.Run(name, func(t *testing.T) {
+				data, f := signSyntheticPE(t, true, crypto.SHA256, testfixture.SignedPKCS7Options{
+					SignerCert:               pki.SignerCert,
+					SignerKey:                pki.SignerKey,
+					OverrideDigestAlgorithms: set,
+				})
+				res, err := f.VerifyAuthenticode(data, pe.AuthenticodeVerifyOptions{})
+				if err != nil {
+					t.Fatalf("VerifyAuthenticode: %v", err)
+				}
+				if cms := res.Signatures[0].Signers[0].CMS; cms.Status != pe.AuthenticodeStatusInvalid || !strings.Contains(cms.Reason, "exactly one entry") {
+					t.Fatalf("CMS = %+v, want Invalid with an entry-count reason", cms)
+				}
+			})
+		}
+	})
+
+	t.Run("SignedDataDigestAlgorithmsIndirectMismatch", func(t *testing.T) {
+		// Set matches SignerInfo; only the IndirectData arm fires.
+		data, f := signSyntheticPE(t, true, crypto.SHA256, testfixture.SignedPKCS7Options{
+			SignerCert:             pki.SignerCert,
+			SignerKey:              pki.SignerKey,
+			OverrideImageDigestOID: asn1.ObjectIdentifier{1, 2, 3, 999, 3},
+		})
+		res, err := f.VerifyAuthenticode(data, pe.AuthenticodeVerifyOptions{})
+		if err != nil {
+			t.Fatalf("VerifyAuthenticode: %v", err)
+		}
+		signer := res.Signatures[0].Signers[0]
+		if cms := signer.CMS; cms.Status != pe.AuthenticodeStatusInvalid || !strings.Contains(cms.Reason, "IndirectData") {
+			t.Fatalf("CMS = %+v, want Invalid with an IndirectData reason", cms)
+		}
+	})
+
+	t.Run("SignedDataDigestAlgorithmsForeignContentType", func(t *testing.T) {
+		// id-data keeps IndirectData nil; regression for a nil dereference.
+		data, f := signSyntheticPE(t, true, crypto.SHA256, testfixture.SignedPKCS7Options{
+			SignerCert:          pki.SignerCert,
+			SignerKey:           pki.SignerKey,
+			OverrideContentType: asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 7, 1},
+		})
+		res, err := f.VerifyAuthenticode(data, pe.AuthenticodeVerifyOptions{})
+		if err != nil {
+			t.Fatalf("VerifyAuthenticode: %v", err)
+		}
+		if d := res.Signatures[0].Digest; d.Status != pe.AuthenticodeStatusInvalid || !strings.Contains(d.Reason, "unexpected CMS content type") {
+			t.Fatalf("Digest = %+v, want Invalid for a foreign content type", d)
+		}
+		if cms := res.Signatures[0].Signers[0].CMS; cms.Status != pe.AuthenticodeStatusValid {
+			t.Fatalf("CMS = %+v, want Valid with both digestAlgorithms arms skipped", cms)
 		}
 	})
 
